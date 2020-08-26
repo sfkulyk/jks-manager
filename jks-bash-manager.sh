@@ -1,4 +1,14 @@
 #!/bin/ksh
+
+#
+# Author: Sergii Kulyk aka Saboteur
+# Version 1.0
+# * List of certificates in JKS
+# * View some details (Alias, Serial, Valid date)
+# * Export to JKS, PKCS12, CRT
+# * Delete certificate
+#
+
 red=$(tput bold;tput setaf 1)
 green=$(tput bold;tput setaf 2)
 blue=$(tput bold;tput setaf 6)
