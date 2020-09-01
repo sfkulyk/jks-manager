@@ -8,68 +8,51 @@
 # * Export to JKS, PKCS12, CRT
 # * Delete certificate
 #
-
+escape_char=$(printf "\u1b")
 COLUMNS=1	# for select command
-STOREPASS="changeme"
 NL="
 "
 
-if [ -z "$1" ]; then
-  echo -n "Provide keystore name (press ENTER to use default ${green}truststore.jks${rst}): "
-  read
-  [ -z "$REPLY" ] && FILE="truststore.jks"
-else
-  FILE="$1"
-fi
+#if [ -z "$1" ]; then
+#  echo -n "Provide keystore name (press ENTER to use default ${green}truststore.jks${rst}): "
+#  read
+#  [ -z "$REPLY" ] && FILE="truststore.jks"
+#else
+#  FILE="$1"
+#fi
+FILE="truststore.jks"
+STOREPASS="changeme"
 
 typeset -A certName
 typeset -A certSerial
 typeset -A certValid
 typeset -A certDays
 typeset -A certTitle
+typeset -i certMax=0
+typeset -i ENTRY=1
 init_certs "$FILE"
+clear
 
+tput init
 # main loop
 while true; do
+  tput home
   print_certs
-  echo -n "${NL}Choose certificate entry: "
-  read ENTRY
-  if [ -z "$ENTRY" ]; then continue; fi
-  if [ "$ENTRY" == "1" ]; then echo "${green}Good bye${rst}"; exit 0; fi
 
-  echo "Selected: ${green}${certName[$ENTRY]}${rst}${NL}"
+  echo "${NL}Choose your action (${red}Q${rst}uit, ${green}E${rst}xport, ${green}I${rst}nfo, ${red}D${rst}elete): "
+  read -rsN1
+  [ "${REPLY}" == "${escape_char}" ] && read -rsN2
+  tput el1 # clear line from escaped chars
 
-  PS3="${NL}Choose action for ${green}${certName[$ENTRY]}${rst}: "
-  select action in "${blue}Exit to list${rst}" "Details" "Export" "Delete"; do
-    case $REPLY in
-      1) echo "${NL}Keystore ${green}${FILE}${rst} list:"
-         break;;
-      2) echo "${NL}Details for entry: [${green}${certName[$ENTRY]}${rst}]"
-         echo "Serial number: ${certSerial[$ENTRY]}"
-         echo "Valid to: ${certValid[$ENTRY]}"
-         echo "Days left: ${certDays[$ENTRY]}";;
-      3) PS3="${NL}Choose export format for ${green}${certName[$ENTRY]}${rst}: "
-         FILENAME=$(echo "${certName[$ENTRY]}"|tr -d '[]()#*?\\/'|tr " " "_")
-         select format in "JKS" "PKCS12" "crt" "${red}Cancel${rst}"; do
-           case $REPLY in
-           1|2) ext=$( echo $format | tr '[:upper:]' '[:lower:]')
-              FILENAME="$FILENAME.${ext}"
-              echo -n "Provide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
-              read
-              [ -n "$REPLY" ] && FILENAME="$REPLY"
-              keytool -importkeystore -srckeystore "${FILE}" -destkeystore "${FILENAME}" -srcalias "${certName[$ENTRY]}" -destalias "${certName[$ENTRY]}" -srcstorepass ${STOREPASS} -deststorepass ${STOREPASS} -deststoretype ${format}
-              break;;
-           3) echo -n "Provide export file name (press ENTER to use: ${green}${FILENAME}.crt${rst}) :"
-              read
-              keytool -exportcert -v -alias "${certName[$ENTRY]}" -keystore "${FILE}" -storepass ${STOREPASS} -rfc -file "${FILENAME}.crt"
-              break;;
-           4) PS3="${NL}Choose action for ${green}${certName[$ENTRY]}${rst}: "
-              break;;
-          esac
-          done
-         echo "${green}Done.${rst}${NL}";;
-      4) delete_cert "${certName[$ENTRY]}" "${FILE}"
-         break;;
-    esac
-  done
+  case "${REPLY}" in
+    q|Q)  echo "${NL}${green}Good bye${rst}"; exit 0;;
+    '[A') ENTRY=$(($ENTRY-1)); [ ${ENTRY} -le 1 ] && ENTRY=1;;
+    '[B') ENTRY=$(($ENTRY+1)); [ ${ENTRY} -ge $certMax ] && ENTRY=$certMax;;
+    e|E)  export_cert "${certName[$ENTRY]}" "${FILE}";clear;;
+    d|D)  delete_cert "${certName[$ENTRY]}" "${FILE}";clear;;
+    i|I)  print_details "${certName[$ENTRY]}" "${FILE}";clear;;
+   '[D') echo LEFT ;;
+   '[C') echo RIGHT ;;
+    *)   clear;;
+  esac
 done
