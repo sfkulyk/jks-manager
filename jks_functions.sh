@@ -16,7 +16,6 @@ MYROWS=$(tput lines)
 MYCOLS=$(tput cols)
 
 COLUMNS=1	# for select command
-STOREPASS="changeme"
 NL="
 "
 
@@ -24,17 +23,17 @@ debug() {
   echo "DEBUG: $1"
 }
 
-# $1: cert name, $2: keystore file
+# $1: cert name, $2: keystore file, $3: storepass
 delete_cert() {
   echo -n "${NL}Write [${red}yes${rst}] or [${red}YES${rst}] to delete [${green}${1}${rst}] from ${green}${2}${rst}: "
   read	
   if [ "$REPLY" == yes -o "$REPLY" == YES ]; then
     echo "${red}Removing certificate [$1]${rst}"
-    keytool -delete -alias "${1}" -keystore "${2}" -storepass ${STOREPASS}
+    keytool -delete -alias "${1}" -keystore "${2}" -storepass ${3}
     if [ $? -eq 0 ]; then
-      echo "Certificate ${blue}${certName[$ENTRY]}${rst} succesfully removed from ${FILENAME}"
+      echo "Certificate ${blue}${1}${rst} succesfully removed from ${2}"
     else
-      echo "${red}Error deleting ${certName[$ENTRY]} from ${FILENAME}${rst}"
+      echo "${red}Error deleting ${1} from ${2}${rst}"
     fi
     sleep 1
   else
@@ -64,8 +63,9 @@ delete_cert() {
   certMax=$((certMax-1))
 }
 
+# $1 - keystore, $2 - keystore pass
 init_certs() {
-  echo "Opening ${green}${FILE}${rst} ..."
+  echo "Opening ${green}${1}${rst} ..."
   # initialize cert list from keystore
   typeset -i cnt=1
   while read; do
@@ -81,9 +81,10 @@ init_certs() {
       certMax=$cnt
       cnt+=1
     fi
-  done<<<$(keytool -list -v -keystore ${1} -storepass ${STOREPASS}|grep -P "(Alias name:|Serial number:|Valid from:)"|grep "Alias name:" -A 2)
+  done<<<$(keytool -list -v -keystore ${1} -storepass ${2}|grep -P "(Alias name:|Serial number:|Valid from:)"|grep "Alias name:" -A 2)
 }
 
+# print cert menu
 print_certs() {
   typeset -i cnt=1
   printf "[%s] %s %s\n" "Valid to  " "Serial No                       " "Alias"
@@ -94,38 +95,37 @@ print_certs() {
   done
 }
 
+# export_cert $Alias $Keystore $Storepass
 export_cert() {
-  FILENAME=$(echo "${certName[$ENTRY]}"|tr -d '[]()#*?\\/'|tr " " "_")
-  PS3="${NL}Choose export format for ${green}${certName[$ENTRY]}${rst}: "
-
-  select format in "JKS" "PKCS12" "crt" "Quit"; do
-    FILENAME="$FILENAME.$(echo -n $format|tr '[:upper:]' '[:lower:]')"
+  ALIASNAME=$(echo "${1}"|tr -d '[]()#*?\\/'|tr " " "_")
+  while true; do
+    echo "${NL}1. ${green}J${rst}KS${NL}2. ${green}P${rst}KCS12${NL}3. ${green}c${rst}rt${NL}4. ${red}Q${rst}uit${NL}${NL}Choose export format for ${green}${1}${rst}: "
+    read -rsN1
     case $REPLY in
-      j|J|1) echo -n "Provide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
+      j|J|1) FILENAME="${ALIASNAME}.jks"
+             echo -n "Provide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
              read
              [ -n "$REPLY" ] && FILENAME="$REPLY"
-             keytool -importkeystore -srckeystore "${FILE}" -destkeystore "${FILENAME}" -srcalias "${certName[$ENTRY]}" -destalias "${certName[$ENTRY]}" -srcstorepass ${STOREPASS} -deststorepass ${STOREPASS} -deststoretype ${format}
-             if [ $? -eq 0 ]; then
-               echo "Certificate ${blue}${certName[$ENTRY]}${rst} is succesfully exported to ${FILENAME}"
-             else
-               echo "${red}Error with exporting ${certName[$ENTRY]} to ${FILENAME}${rst}"
+             keytool -importkeystore -srckeystore "${2}" -destkeystore "${FILENAME}" -srcalias "${1}" -destalias "${1}" -srcstorepass ${3} -deststorepass ${3} -deststoretype jks
+             if [ $? -eq 0 ]; then echo "Certificate ${blue}${1}${rst} is succesfully exported to ${FILENAME}"
+               else                echo "${red}Error with exporting ${1} to ${FILENAME}${rst}"
              fi;;
-      p|P|2) echo -n "Provide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
+      p|P|2) FILENAME="${ALIASNAME}.pkcs12"
+             echo -n "Provide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
              read
              [ -n "$REPLY" ] && FILENAME="$REPLY"
-             keytool -importkeystore -srckeystore "${FILE}" -destkeystore "${FILENAME}" -srcalias "${certName[$ENTRY]}" -destalias "${certName[$ENTRY]}" -srcstorepass ${STOREPASS} -deststorepass ${STOREPASS} -deststoretype ${format}
-             if [ $? -eq 0 ]; then
-               echo "Certificate ${blue}${certName[$ENTRY]}${rst} is succesfully exported to ${FILENAME}"
-             else
-               echo "${red}Error with exporting ${certName[$ENTRY]} to ${FILENAME}${rst}"
+             keytool -importkeystore -srckeystore "${2}" -destkeystore "${FILENAME}" -srcalias "${1}" -destalias "${1}" -srcstorepass ${3} -deststorepass ${3} -deststoretype pkcs12
+             if [ $? -eq 0 ]; then echo "Certificate ${blue}${1}${rst} is succesfully exported to ${FILENAME}"
+               else                echo "${red}Error with exporting ${1} to ${FILENAME}${rst}"
              fi;;
-      c|C|3) echo -n "Provide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
+      c|C|3) FILENAME="${ALIASNAME}.cer"
+             echo -n "Provide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
              read
-             keytool -exportcert -v -alias "${certName[$ENTRY]}" -keystore "${FILE}" -storepass ${STOREPASS} -rfc -file "${FILENAME}"
+             keytool -exportcert -v -alias "${1}" -keystore "${2}" -storepass ${3} -rfc -file "${FILENAME}"
              if [ $? -eq 0 ]; then
-               echo "Certificate ${blue}${certName[$ENTRY]}${rst} is succesfully exported to ${FILENAME}"
+               echo "Certificate ${blue}${1}${rst} is succesfully exported to ${FILENAME}"
              else
-               echo "${red}Error with exporting ${certName[$ENTRY]} to ${FILENAME}${rst}"
+               echo "${red}Error with exporting ${1} to ${FILENAME}${rst}"
              fi;;
       q|Q|4) break;;
     esac

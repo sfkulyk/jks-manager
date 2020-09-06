@@ -30,7 +30,7 @@ typeset -A certDays
 typeset -A certTitle
 typeset -i certMax=0
 typeset -i ENTRY=1
-init_certs "$FILE"
+init_certs "$FILE" "$STOREPASS"
 clear
 
 tput init
@@ -48,9 +48,9 @@ while true; do
     q|Q)  echo "${NL}${green}Good bye${rst}"; exit 0;;
     '[A') ENTRY=$(($ENTRY-1)); [ ${ENTRY} -le 1 ] && ENTRY=1;;
     '[B') ENTRY=$(($ENTRY+1)); [ ${ENTRY} -ge $certMax ] && ENTRY=$certMax;;
-    e|E)  export_cert "${certName[$ENTRY]}" "${FILE}";clear;;
-    d|D)  delete_cert "${certName[$ENTRY]}" "${FILE}";clear;;
-    i|I)  print_details "${certName[$ENTRY]}" "${FILE}";clear;;
+    e|E)  export_cert "${certName[$ENTRY]}" "${FILE}" "${STOREPASS}";clear;;
+    d|D)  delete_cert "${certName[$ENTRY]}" "${FILE}" "${STOREPASS}";clear;;
+    i|I)  print_details "${certName[$ENTRY]}" "${FILE}" "${STOREPASS}";clear;;
    '[D') echo LEFT ;;
    '[C') echo RIGHT ;;
     *)   clear;;
