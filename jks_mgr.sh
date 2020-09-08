@@ -1,5 +1,5 @@
 #!/bin/ksh
-. $(dirname $0)/jks_functions.sh
+. $(dirname $0)/functions.sh
 #
 # Author: Sergii Kulyk aka Saboteur
 # Version 1.0
@@ -20,20 +20,28 @@ NL="
 #else
 #  FILE="$1"
 #fi
-FILE="truststore.jks"
-STOREPASS="changeme"
+LFILE="Ltruststore.jks"
+LSTOREPASS="changeme"
+RFILE="Rtruststore.jks"
+RSTOREPASS="changeme"
+typeset -A LcertName LcertSerial LcertValid LcertDays LcertTitle
+typeset -i LcertMax=0 LENTRY=1
+typeset -A RcertName RcertSerial RcertValid RcertDays RcertTitle
+typeset -i RcertMax=0 RENTRY=1
 
-typeset -A certName
-typeset -A certSerial
-typeset -A certValid
-typeset -A certDays
-typeset -A certTitle
-typeset -i certMax=0
-typeset -i ENTRY=1
-init_certs "$FILE" "$STOREPASS"
+TAB="L"	# LEFT is default
+
+# init left tab
+init_certs "${LFILE}" "${LSTOREPASS}" "L"
+
+# init right tab if second file is set
+if [ -n "$RFILE" ]; then
+  init_certs "${RFILE}" "${RSTOREPASS}" "R"
+fi
+
 clear
-
 tput init
+
 # main loop
 while true; do
   tput home
@@ -46,13 +54,34 @@ while true; do
 
   case "${REPLY}" in
     q|Q)  echo "${NL}${green}Good bye${rst}"; exit 0;;
-    '[A') ENTRY=$(($ENTRY-1)); [ ${ENTRY} -le 1 ] && ENTRY=1;;
-    '[B') ENTRY=$(($ENTRY+1)); [ ${ENTRY} -ge $certMax ] && ENTRY=$certMax;;
-    e|E)  export_cert "${certName[$ENTRY]}" "${FILE}" "${STOREPASS}";clear;;
-    d|D)  delete_cert "${certName[$ENTRY]}" "${FILE}" "${STOREPASS}";clear;;
-    i|I)  print_details "${certName[$ENTRY]}" "${FILE}" "${STOREPASS}";clear;;
-   '[D') echo LEFT ;;
-   '[C') echo RIGHT ;;
-    *)   clear;;
+    '[A') if [ ${TAB} == "L" ]; then
+            LENTRY=$(( ${LENTRY}-1 )); [ ${LENTRY} -le 1 ] && LENTRY=1
+          else
+            RENTRY=$(( ${RENTRY}-1 )); [ ${RENTRY} -le 1 ] && RENTRY=1
+          fi;;
+    '[B') if [ $TAB == 'L' ]; then
+            LENTRY=$(( ${LENTRY}+1 )); [ ${LENTRY} -gt ${LcertMax} ] && LENTRY=${LcertMax}
+          else
+            RENTRY=$(( ${RENTRY}+1 )); [ ${RENTRY} -gt ${RcertMax} ] && RENTRY=${RcertMax}
+          fi;;
+    e|E)  if [ ${TAB} == "L" ]; then
+            export_cert "${LcertName[$LENTRY]}" "${LFILE}" "${LSTOREPASS}";clear
+          else
+            export_cert "${RcertName[$RENTRY]}" "${RFILE}" "${RSTOREPASS}";clear
+          fi;;
+    d|D)  if [ ${TAB} == "L" ]; then
+            delete_cert "${LcertName[$LENTRY]}" "${LFILE}" "${LSTOREPASS}";clear
+          else
+            delete_cert "${RcertName[$RENTRY]}" "${RFILE}" "${RSTOREPASS}";clear
+          fi;;
+    i|I)  if [ ${TAB} == "L" ]; then
+            print_details "${LcertName[$LENTRY]}" "${LFILE}" "${LSTOREPASS}";clear
+          else
+            print_details "${RcertName[$RENTRY]}" "${RFILE}" "${RSTOREPASS}";clear
+          fi;;
+   '[D')  TAB="L";;
+   '[C')  TAB="R";;
+   '	' ) [ "$TAB" == "L" ] && TAB=R || TAB=L;;
+    *)    clear;;
   esac
 done
