@@ -16,6 +16,7 @@ COLUMNS=1	# for select command
 NL="
 "
 
+# $1 seconds, $2 text
 delay() {
   echo "$2"
   read -N1 -t $1
@@ -51,11 +52,9 @@ delete_cert() {
         LcertSerial[$cnt]=${LcertSerial[$next]}
         LcertValid[$cnt]=${LcertValid[$next]}
         LcertDays[$cnt]=${LcertDays[$next]}
-        LcertTitle[$cnt]=${LcertTitle[$next]}
       fi
       cnt+=1; next+=1
     done
-    unset LcertTitle[$cnt]
     unset LcertName[$cnt]
     unset LcertSerial[$cnt]
     unset LcertValid[$cnt]
@@ -69,11 +68,9 @@ delete_cert() {
         RcertSerial[$cnt]=${RcertSerial[$next]}
         RcertValid[$cnt]=${RcertValid[$next]}
         RcertDays[$cnt]=${RcertDays[$next]}
-        RcertTitle[$cnt]=${RcertTitle[$next]}
       fi
       cnt+=1; next+=1
     done
-    unset RcertTitle[$cnt]
     unset RcertName[$cnt]
     unset RcertSerial[$cnt]
     unset RcertValid[$cnt]
@@ -83,7 +80,7 @@ delete_cert() {
   delay 2 "Certificate ${blue}$1${rst} succesfully removed from ${blue}$2${rst}"
 }
 
-# $1 - keystore, $2 - keystore pass, $3 - tab
+# $1 - keystore, $2 - keystore pass, $3 - tab (L or R)
 init_certs() {
   localTAB=$3
   echo "Opening ${green}$1${rst} ... as ${localTAB}"
@@ -99,16 +96,15 @@ init_certs() {
       eval ${localTAB}certValid[$cnt]=$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d")
       validunix=$(/bin/date --date="${REPLY##*until: }" "+%s")
       eval ${localTAB}certDays[$cnt]=$(( (${validunix} - $(/bin/date "+%s")) / 3600 / 24 ))
-      eval ${localTAB}certTitle[$cnt]="$(printf '%s %s\n' ${certValid[$cnt]} ${localAlias})"
       eval ${localTAB}certMax=$cnt
       cnt+=1
     fi
   done<<<$(keytool -list -v -keystore "$1" -storepass "$2"|grep -P "(Alias name:|Serial number:|Valid from:)"|grep "Alias name:" -A 2)
 }
 
-# print cert menu
+# no args
 print_certs() {
-  typeset -i cnt=1
+  typeset -i cnt=$POSITION
   typeset -i commonMax=${LcertMax}
 
   if [ -n "$RFILE" ]; then
@@ -121,20 +117,22 @@ print_certs() {
   fi
   echo "-----------------------------------------------------------------"
 
+  if [ $commonMax -gt $(( $POSITION + $pageHeight )) ]; then
+    commonMax=$(($POSITION + $pageHeight))
+  fi
+
   while [ $cnt -le $commonMax ]; do
     if [ -n "$RFILE" ]; then
       lcolor="" && rcolor=""
-
       if [ $cnt -eq $LENTRY ]; then
         [ $TAB == "L" ] && lcolor=${blueb} || lcolor=${blue}
       fi
       if [ $cnt -eq $RENTRY ]; then
         [ $TAB == "R" ] && rcolor=${blueb} || rcolor=${blue}
       fi
-
-      printf " ${lcolor}%10s %-20s${rst} | ${rcolor}%10s %-20s${rst}\n" "${LcertValid[$cnt]}" "${LcertName[$cnt]}" "${RcertValid[$cnt]}" "${RcertName[$cnt]}"
+      printf "%1s${lcolor}%10s %-20s${rst} |%1s${rcolor}%10s %-20s${rst}\n" "${Lflags[$cnt]}" "${LcertValid[$cnt]}" "${LcertName[$cnt]}" "${Rflags[$cnt]}" "${RcertValid[$cnt]}" "${RcertName[$cnt]}"
     else
-      [ $cnt eq $LENTRY ] && lcolor="${blueb}" || lcolor=""
+      [ $cnt -eq $LENTRY ] && lcolor="${blueb}" || lcolor=""
       printf " ${lcolor}%10s %32s %-20s${rst}\n" "${LcertValid[$cnt]}" ${LcertSerial[$cnt]} "${LcertName[$cnt]}"
     fi
     cnt+=1
@@ -182,6 +180,7 @@ export_cert() {
   done
 }
 
+# no args
 print_details() {
   if [ $TAB == "L" ]; then
     localAlias=${LcertName[$LENTRY]}
@@ -202,6 +201,7 @@ print_details() {
   read -rsn1
 }
 
+# $1 sourcealias  $2 -sourcestore $3 sourcestorepass $4 deststore $5 deststorepass
 copy_cert() {
   echo -n "${NL}Press ${red}y${rst}/${red}Y${rst} to copy [${green}$1${rst}] from ${green}$2${rst} to ${green}$4${rst}: "
   read -N1
@@ -219,14 +219,12 @@ copy_cert() {
 
   if [ "$TAB" == "L" ]; then
     RcertMax=$((${RcertMax}+1))
-    RcertTitle[${RcertMax}]=${LcertTitle[${LENTRY}]}
     RcertName[${RcertMax}]=${LcertName[${LENTRY}]}
     RcertSerial[${RcertMax}]=${LcertSerial[${LENTRY}]}
     RcertValid[${RcertMax}]=${LcertValid[${LENTRY}]}
     RcertDays[${RcertMax}]=${LcertDays[${LENTRY}]}
   else
     LcertMax=$((${LcertMax}+1))
-    LcertTitle[${LcertMax}]=${RcertTitle[${RENTRY}]}
     LcertName[${LcertMax}]=${RcertName[${RENTRY}]}
     LcertSerial[${LcertMax}]=${RcertSerial[${RENTRY}]}
     LcertValid[${LcertMax}]=${RcertValid[${RENTRY}]}
@@ -268,11 +266,53 @@ rename_cert() {
   fi
   rm tmp.jks
   if [ "$TAB" == "L" ]; then
-    LcertTitle[$LENTRY]="$(printf '%s %s\n' ${LcertValid[$LENTRY]} ${newAlias})"
     LcertName[$LENTRY]="$newAlias"
   else
-    RcertTitle[$RENTRY]="$(printf '%s %s\n' ${certValid[$RENTRY]} ${newAlias})"
     RcertName[$RENTRY]="$newAlias"
   fi
   delay 2 "Certificate ${blue}$1${rst} succesfully renamed to ${blue}${newAlias}${rst}"
+}
+
+# $1 - L or R
+switch_tab() {
+  [ -z "$RFILE" ] && return
+  if [ "$1" == "L" ]; then
+    [ $POSITION -gt $LENTRY ] && POSITION=$LENTRY
+    [ $(( $POSITION+$pageHeight )) -lt $LENTRY ] && POSITION=$(($LENTRY-$pageHeight))
+    TAB="L"
+  else
+    [ $POSITION -gt $RENTRY ] && POSITION=$RENTRY
+    [ $(( $POSITION+$pageHeight )) -lt $RENTRY ] && POSITION=$(($RENTRY-$pageHeight))
+    TAB="R"
+  fi
+}
+
+# No args
+compare_certs() {
+  typeset -i lcnt=1 rcnt=1
+
+  # clear flags
+  while [ $lcnt -le $LcertMax ]; do
+    rcnt=1
+    while [ $rcnt -le $RcertMax ]; do
+      Lflags[$lcnt]=""
+      Rflags[$rcnt]=""
+      rcnt=$(($rcnt+1))
+    done
+    lcnt=$(($lcnt+1))
+  done
+
+  # set flag if we found certificates with same serial No
+  lcnt=1
+  while [ $lcnt -le $LcertMax ]; do
+    rcnt=1
+    while [ $rcnt -le $RcertMax ]; do
+      if [ "${LcertSerial[$lcnt]}" == "${RcertSerial[$rcnt]}" ]; then
+        Lflags[$lcnt]="${blue}*${rst}"
+        Rflags[$rcnt]="${blue}*${rst}"
+      fi
+      rcnt=$(($rcnt+1))
+    done
+    lcnt=$(($lcnt+1))
+  done
 }
