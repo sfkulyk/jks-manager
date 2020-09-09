@@ -1,11 +1,8 @@
 #
-# Author: Sergii Kulyk aka Saboteur
-# Version 1.0
-# * List of certificates in JKS
-# * View some details (Alias, Serial, Valid date)
-# * Export to JKS, PKCS12, CRT
-# * Delete certificate
+# Java keystore bash manager
+# functions
 #
+# Author: Sergii Kulyk aka Saboteur
 
 red=$(tput bold;tput setaf 1)
 green=$(tput bold;tput setaf 2)
@@ -19,6 +16,11 @@ COLUMNS=1	# for select command
 NL="
 "
 
+delay() {
+  echo "$2"
+  read -N1 -t $1
+}
+
 debug() {
   echo "DEBUG: $1"
 }
@@ -30,15 +32,12 @@ delete_cert() {
   if [ "$REPLY" == y -o "$REPLY" == Y ]; then
     echo "${NL}${red}Removing certificate [$1]${rst}"
     keytool -delete -alias "$1" -keystore "$2" -storepass "$3"
-    if [ $? -eq 0 ]; then
-      echo "Certificate ${blue}$1${rst} succesfully removed from $2"
-    else
-      echo "${red}Error deleting $1 from $2${rst}"
+    if [ $? -ne 0 ]; then
+      delay 5 "${red}Error deleting $1 from $2${rst}"
+      return
     fi
-    sleep 1
   else
-    echo "${NL}${red}Cancelled.${rst}"
-    sleep 1
+    delay 5 "${NL}${red}Cancelled.${rst}"
     return
   fi
 
@@ -81,6 +80,7 @@ delete_cert() {
     unset RcertDays[$cnt]
     RcertMax=$(($RcertMax-1))
   fi
+  delay 2 "Certificate ${blue}$1${rst} succesfully removed from ${blue}$2${rst}"
 }
 
 # $1 - keystore, $2 - keystore pass, $3 - tab
@@ -113,23 +113,29 @@ print_certs() {
 
   if [ -n "$RFILE" ]; then
     [ "${RcertMax}" -gt "${LcertMax}" ] && commonMax=${RcertMax}
-    printf "%10s %20s | %10s %20s\n" " Valid to " "Alias" " Valid to " "Alias"
+    printf " store: ${blue}%-24s${rst} | store: ${blue}%-24s${rst}\n" "$LFILE" "$RFILE"
+    printf " %-10s %-20s | %-10s %-20s\n" "Valid to" "Alias" "Valid to" "Alias"
   else
-    printf "%12s %32s %20s\n" "[ Valid to ]" "Serial No" "Alias"
+    printf " store: %s\n" "$LFILE"
+    printf " %-10s %-32s %-20s\n" "Valid to" "Serial No" "Alias"
   fi
+  echo "-----------------------------------------------------------------"
 
   while [ $cnt -le $commonMax ]; do
     if [ -n "$RFILE" ]; then
-      if   [ $TAB == "L" -a $cnt -eq $LENTRY ]; then lcolor="${blue}"; rcolor=""
-      elif [ $TAB == "R" -a $cnt -eq $RENTRY ]; then rcolor="${blue}"; lcolor=""
-      else lcolor="" && rcolor=""
+      lcolor="" && rcolor=""
+
+      if [ $cnt -eq $LENTRY ]; then
+        [ $TAB == "L" ] && lcolor=${blueb} || lcolor=${blue}
       fi
-      printf "${lcolor}%10s %-20s${rst} |  ${rcolor}%10s %-20s${rst}\n" "${LcertValid[$cnt]}" "${LcertName[$cnt]}" "${RcertValid[$cnt]}" "${RcertName[$cnt]}"
+      if [ $cnt -eq $RENTRY ]; then
+        [ $TAB == "R" ] && rcolor=${blueb} || rcolor=${blue}
+      fi
+
+      printf " ${lcolor}%10s %-20s${rst} | ${rcolor}%10s %-20s${rst}\n" "${LcertValid[$cnt]}" "${LcertName[$cnt]}" "${RcertValid[$cnt]}" "${RcertName[$cnt]}"
     else
-      if [ $cnt eq $LENTRY ]; then lcolor="${blue}"
-      else lcolor=""
-      fi
-      printf "${lcolor}%10s %32s %-20s${rst}\n" "${LcertValid[$cnt]}" ${LcertSerial[$cnt]} "${LcertName[$cnt]}"
+      [ $cnt eq $LENTRY ] && lcolor="${blueb}" || lcolor=""
+      printf " ${lcolor}%10s %32s %-20s${rst}\n" "${LcertValid[$cnt]}" ${LcertSerial[$cnt]} "${LcertName[$cnt]}"
     fi
     cnt+=1
   done
@@ -147,30 +153,33 @@ export_cert() {
              read
              [ -n "$REPLY" ] && FILENAME="$REPLY"
              keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$3" -deststoretype jks
-             if [ $? -eq 0 ]; then echo "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}"
-               else                echo "${red}Error with exporting $1 to ${FILENAME}${rst}"
+             if [ $? -eq 0 ]; then
+               delay 2 echo "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}"
+             else
+               delay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}"
              fi;;
       p|P|2) FILENAME="${ALIASNAME}.pkcs12"
              echo -n "${NL}Provide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
              read
              [ -n "$REPLY" ] && FILENAME="$REPLY"
              keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$3" -deststoretype pkcs12
-             if [ $? -eq 0 ]; then echo "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}"
-               else                echo "${red}Error with exporting $1 to ${FILENAME}${rst}"
+             if [ $? -eq 0 ]; then
+               delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}"
+             else
+               delay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}"
              fi;;
       c|C|3) FILENAME="${ALIASNAME}.cer"
              echo -n "${NL}Provide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
              read
              keytool -exportcert -v -alias "$1" -keystore "$2" -storepass "$3" -rfc -file "${FILENAME}"
              if [ $? -eq 0 ]; then
-               echo "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}"
+               delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}"
              else
-               echo "${red}Error with exporting $1 to ${FILENAME}${rst}"
+               delay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}"
              fi;;
       q|Q|4) break;;
     esac
   done
-  echo "${green}Done.${rst}${NL}"
 }
 
 print_details() {
@@ -187,7 +196,7 @@ print_details() {
   fi
   echo "${NL}Details for certificate [${green}${localAlias}${rst}]:"
   echo "Serial number: ${localSerial}"
-  echo "Valid to: ${localValud}"
+  echo "Valid to: ${localValid}"
   echo "Days left: ${localDays}"
   echo "${NL}Press any key"
   read -rsn1
@@ -197,17 +206,14 @@ copy_cert() {
   echo -n "${NL}Press ${red}y${rst}/${red}Y${rst} to copy [${green}$1${rst}] from ${green}$2${rst} to ${green}$4${rst}: "
   read -N1
   if [ "$REPLY" == y -o "$REPLY" == Y ]; then
-    echo "${NL}${red}Copying certificate [$1]${rst}"
+    echo "${NL}${blue}Copying certificate [$1]${rst}"
     keytool -importkeystore -srckeystore "$2" -destkeystore "$4" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$5"
-    if [ $? -eq 0 ]; then
-      echo "Certificate ${blue}$1${rst} succesfully copyed from ${blue}$2${rst} to ${blue}$4${rst}"
-    else
-      echo "${red}Error copying $1 from $2${rst}"
+    if [ $? -ne 0 ]; then
+      delay 5 echo "${red}Error copying $1 from $2${rst}"
+      return
     fi
-    sleep 1
   else
-    echo "${NL}${red}Cancelled.${rst}"
-    sleep 1
+    delay 5 "${NL}${red}Cancelled.${rst}"
     return
   fi
 
@@ -226,4 +232,47 @@ copy_cert() {
     LcertValid[${LcertMax}]=${RcertValid[${RENTRY}]}
     LcertDays[${LcertMax}]=${RcertDays[${RENTRY}]}
   fi
+  delay 2 "Certificate ${blue}$1${rst} succesfully copyed from ${blue}$2${rst} to ${blue}$4${rst}"
+}
+
+# $1 source alias, $2 keystore file $3 store pass
+rename_cert() {
+  echo -n "${NL}Provide new name for ${blue}$1${rst}: "
+  read newAlias
+  if [ -z "$newAlias" ]; then
+    delay 5 "${NL}${red}Cancelled.${rst}"
+    return
+  fi
+  echo -n "${NL}Press ${red}y${rst}/${red}Y${rst} to rename ${green}$1${rst} from ${green}$2${rst} to ${green}${newAlias}${rst}: "
+  read -N1
+  if [ "$REPLY" == y -o "$REPLY" == Y ]; then
+    echo "${NL}${blue}Renaming certificate [$1]${rst}"
+    keytool -importkeystore -srckeystore "$2" -destkeystore "tmp.jks" -srcalias "$1" -destalias "$newAlias" -srcstorepass "$3" -deststorepass "$3"
+    if [ $? -ne 0 ]; then
+      delay 5 "${red}Error renaming certificate $1 from $2${rst}"
+      return
+    fi
+    keytool -importkeystore -srckeystore "tmp.jks" -destkeystore "$2" -srcalias "$newAlias" -destalias "$newAlias" -srcstorepass "$3" -deststorepass "$3"
+    if [ $? -ne 0 ]; then
+      delay 5 "${red}Error renaming certificate $1 from $2${rst}"
+      return
+    fi
+    keytool -delete -alias "$1" -keystore "$2" -storepass "$3"
+    if [ $? -ne 0 ]; then
+      delay 5 "${red}Error renaming certificate $1 from $2${rst}"
+      return
+    fi
+  else
+    delay 5 "${NL}${red}Cancelled.${rst}"
+    return
+  fi
+  rm tmp.jks
+  if [ "$TAB" == "L" ]; then
+    LcertTitle[$LENTRY]="$(printf '%s %s\n' ${LcertValid[$LENTRY]} ${newAlias})"
+    LcertName[$LENTRY]="$newAlias"
+  else
+    RcertTitle[$RENTRY]="$(printf '%s %s\n' ${certValid[$RENTRY]} ${newAlias})"
+    RcertName[$RENTRY]="$newAlias"
+  fi
+  delay 2 "Certificate ${blue}$1${rst} succesfully renamed to ${blue}${newAlias}${rst}"
 }
