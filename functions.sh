@@ -25,19 +25,19 @@ debug() {
 
 # $1: cert name, $2: keystore file, $3: storepass
 delete_cert() {
-  echo -n "${NL}Write [${red}yes${rst}] or [${red}YES${rst}] to delete [${green}${1}${rst}] from ${green}${2}${rst}: "
-  read	
-  if [ "$REPLY" == yes -o "$REPLY" == YES ]; then
-    echo "${red}Removing certificate [$1]${rst}"
-    keytool -delete -alias "${1}" -keystore "${2}" -storepass ${3}
+  echo -n "${NL}Press ${red}y${rst}/${red}Y${rst} to delete [${green}$1${rst}] from ${green}$2${rst}: "
+  read -N1
+  if [ "$REPLY" == y -o "$REPLY" == Y ]; then
+    echo "${NL}${red}Removing certificate [$1]${rst}"
+    keytool -delete -alias "$1" -keystore "$2" -storepass "$3"
     if [ $? -eq 0 ]; then
-      echo "Certificate ${blue}${1}${rst} succesfully removed from ${2}"
+      echo "Certificate ${blue}$1${rst} succesfully removed from $2"
     else
-      echo "${red}Error deleting ${1} from ${2}${rst}"
+      echo "${red}Error deleting $1 from $2${rst}"
     fi
     sleep 1
   else
-    echo "${red}Cancelled.${rst}"
+    echo "${NL}${red}Cancelled.${rst}"
     sleep 1
     return
   fi
@@ -46,7 +46,7 @@ delete_cert() {
   found=0
   if [ $TAB == "L" ]; then
     while [ -n "${LcertName[$next]}" ]; do
-      [ "${LcertName[$cnt]}" == "${1}" ] && found=1
+      [ "${LcertName[$cnt]}" == "$1" ] && found=1
       if [ $found == 1 ] ; then
         LcertName[$cnt]=${LcertName[$next]}
         LcertSerial[$cnt]=${LcertSerial[$next]}
@@ -61,10 +61,10 @@ delete_cert() {
     unset LcertSerial[$cnt]
     unset LcertValid[$cnt]
     unset LcertDays[$cnt]
-    LcertMax=$((LcertMax-1))
+    LcertMax=$(($LcertMax-1))
   else
     while [ -n "${RcertName[$next]}" ]; do
-      [ "${RcertName[$cnt]}" == "${1}" ] && found=1
+      [ "${RcertName[$cnt]}" == "$1" ] && found=1
       if [ $found == 1 ] ; then
         RcertName[$cnt]=${RcertName[$next]}
         RcertSerial[$cnt]=${RcertSerial[$next]}
@@ -79,14 +79,14 @@ delete_cert() {
     unset RcertSerial[$cnt]
     unset RcertValid[$cnt]
     unset RcertDays[$cnt]
-    RcertMax=$((RcertMax-1))
+    RcertMax=$(($RcertMax-1))
   fi
 }
 
 # $1 - keystore, $2 - keystore pass, $3 - tab
 init_certs() {
-  localTAB=${3}
-  echo "Opening ${green}${1}${rst} ... as $localTAB"
+  localTAB=$3
+  echo "Opening ${green}$1${rst} ... as ${localTAB}"
   # initialize cert list from keystore
   typeset -i cnt=1
   while read; do
@@ -103,7 +103,7 @@ init_certs() {
       eval ${localTAB}certMax=$cnt
       cnt+=1
     fi
-  done<<<$(keytool -list -v -keystore ${1} -storepass ${2}|grep -P "(Alias name:|Serial number:|Valid from:)"|grep "Alias name:" -A 2)
+  done<<<$(keytool -list -v -keystore "$1" -storepass "$2"|grep -P "(Alias name:|Serial number:|Valid from:)"|grep "Alias name:" -A 2)
 }
 
 # print cert menu
@@ -120,8 +120,8 @@ print_certs() {
 
   while [ $cnt -le $commonMax ]; do
     if [ -n "$RFILE" ]; then
-      if   [ ${TAB} == "L" -a $cnt -eq $LENTRY ]; then lcolor="${blue}"; rcolor=""
-      elif [ ${TAB} == "R" -a $cnt -eq $RENTRY ]; then rcolor="${blue}"; lcolor=""
+      if   [ $TAB == "L" -a $cnt -eq $LENTRY ]; then lcolor="${blue}"; rcolor=""
+      elif [ $TAB == "R" -a $cnt -eq $RENTRY ]; then rcolor="${blue}"; lcolor=""
       else lcolor="" && rcolor=""
       fi
       printf "${lcolor}%10s %-20s${rst} |  ${rcolor}%10s %-20s${rst}\n" "${LcertValid[$cnt]}" "${LcertName[$cnt]}" "${RcertValid[$cnt]}" "${RcertName[$cnt]}"
@@ -137,35 +137,35 @@ print_certs() {
 
 # export_cert $Alias $Keystore $Storepass
 export_cert() {
-  ALIASNAME=$(echo "${1}"|tr -d '[]()#*?\\/'|tr " " "_")
+  ALIASNAME=$(echo "$1"|tr -d '[]()#*?\\/'|tr " " "_")
   while true; do
-    echo -n "${NL}1. ${green}J${rst}KS${NL}2. ${green}P${rst}KCS12${NL}3. ${green}c${rst}rt${NL}4. ${red}Q${rst}uit${NL}${NL}Choose export format for certificate: ${green}${1}${rst} from ${green}${2}${rst}: "
+    echo -n "${NL}1. ${green}J${rst}KS${NL}2. ${green}P${rst}KCS12${NL}3. ${green}c${rst}rt${NL}4. ${red}Q${rst}uit${NL}${NL}Choose export format for certificate: ${green}$1${rst} from ${green}$2${rst}: "
     read -rsN1
     case $REPLY in
       j|J|1) FILENAME="${ALIASNAME}.jks"
              echo -n "${NL}Provide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
              read
              [ -n "$REPLY" ] && FILENAME="$REPLY"
-             keytool -importkeystore -srckeystore "${2}" -destkeystore "${FILENAME}" -srcalias "${1}" -destalias "${1}" -srcstorepass ${3} -deststorepass ${3} -deststoretype jks
-             if [ $? -eq 0 ]; then echo "Certificate ${blue}${1}${rst} is succesfully exported to ${blue}${FILENAME}${rst}"
-               else                echo "${red}Error with exporting ${1} to ${FILENAME}${rst}"
+             keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$3" -deststoretype jks
+             if [ $? -eq 0 ]; then echo "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}"
+               else                echo "${red}Error with exporting $1 to ${FILENAME}${rst}"
              fi;;
       p|P|2) FILENAME="${ALIASNAME}.pkcs12"
              echo -n "${NL}Provide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
              read
              [ -n "$REPLY" ] && FILENAME="$REPLY"
-             keytool -importkeystore -srckeystore "${2}" -destkeystore "${FILENAME}" -srcalias "${1}" -destalias "${1}" -srcstorepass ${3} -deststorepass ${3} -deststoretype pkcs12
-             if [ $? -eq 0 ]; then echo "Certificate ${blue}${1}${rst} is succesfully exported to ${blue}${FILENAME}${rst}"
-               else                echo "${red}Error with exporting ${1} to ${FILENAME}${rst}"
+             keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$3" -deststoretype pkcs12
+             if [ $? -eq 0 ]; then echo "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}"
+               else                echo "${red}Error with exporting $1 to ${FILENAME}${rst}"
              fi;;
       c|C|3) FILENAME="${ALIASNAME}.cer"
              echo -n "${NL}Provide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
              read
-             keytool -exportcert -v -alias "${1}" -keystore "${2}" -storepass ${3} -rfc -file "${FILENAME}"
+             keytool -exportcert -v -alias "$1" -keystore "$2" -storepass "$3" -rfc -file "${FILENAME}"
              if [ $? -eq 0 ]; then
-               echo "Certificate ${blue}${1}${rst} is succesfully exported to ${blue}${FILENAME}${rst}"
+               echo "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}"
              else
-               echo "${red}Error with exporting ${1} to ${FILENAME}${rst}"
+               echo "${red}Error with exporting $1 to ${FILENAME}${rst}"
              fi;;
       q|Q|4) break;;
     esac
@@ -191,4 +191,39 @@ print_details() {
   echo "Days left: ${localDays}"
   echo "${NL}Press any key"
   read -rsn1
+}
+
+copy_cert() {
+  echo -n "${NL}Press ${red}y${rst}/${red}Y${rst} to copy [${green}$1${rst}] from ${green}$2${rst} to ${green}$4${rst}: "
+  read -N1
+  if [ "$REPLY" == y -o "$REPLY" == Y ]; then
+    echo "${NL}${red}Copying certificate [$1]${rst}"
+    keytool -importkeystore -srckeystore "$2" -destkeystore "$4" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$5"
+    if [ $? -eq 0 ]; then
+      echo "Certificate ${blue}$1${rst} succesfully copyed from ${blue}$2${rst} to ${blue}$4${rst}"
+    else
+      echo "${red}Error copying $1 from $2${rst}"
+    fi
+    sleep 1
+  else
+    echo "${NL}${red}Cancelled.${rst}"
+    sleep 1
+    return
+  fi
+
+  if [ "$TAB" == "L" ]; then
+    RcertMax=$((${RcertMax}+1))
+    RcertTitle[${RcertMax}]=${LcertTitle[${LENTRY}]}
+    RcertName[${RcertMax}]=${LcertName[${LENTRY}]}
+    RcertSerial[${RcertMax}]=${LcertSerial[${LENTRY}]}
+    RcertValid[${RcertMax}]=${LcertValid[${LENTRY}]}
+    RcertDays[${RcertMax}]=${LcertDays[${LENTRY}]}
+  else
+    LcertMax=$((${LcertMax}+1))
+    LcertTitle[${LcertMax}]=${RcertTitle[${RENTRY}]}
+    LcertName[${LcertMax}]=${RcertName[${RENTRY}]}
+    LcertSerial[${LcertMax}]=${RcertSerial[${RENTRY}]}
+    LcertValid[${LcertMax}]=${RcertValid[${RENTRY}]}
+    LcertDays[${LcertMax}]=${RcertDays[${RENTRY}]}
+  fi
 }

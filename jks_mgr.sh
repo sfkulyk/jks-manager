@@ -32,11 +32,11 @@ typeset -i RcertMax=0 RENTRY=1
 TAB="L"	# LEFT is default
 
 # init left tab
-init_certs "${LFILE}" "${LSTOREPASS}" "L"
+init_certs "$LFILE" "$LSTOREPASS" "L"
 
 # init right tab if second file is set
 if [ -n "$RFILE" ]; then
-  init_certs "${RFILE}" "${RSTOREPASS}" "R"
+  init_certs "$RFILE" "$RSTOREPASS" "R"
 fi
 
 clear
@@ -47,29 +47,39 @@ while true; do
   tput home
   print_certs
 
-  echo "${NL}Choose your action (${red}Q${rst}uit, ${green}E${rst}xport, ${green}I${rst}nfo, ${red}D${rst}elete): "
+  if [ -n "$RFILE" ]; then
+    echo "${NL}Choose your action (${red}Q${rst}uit, ${green}E${rst}xport, ${green}C${rst}opy, ${green}I${rst}nfo, ${red}D${rst}elete): "
+  else
+    echo "${NL}Choose your action (${red}Q${rst}uit, ${green}E${rst}xport, ${green}I${rst}nfo, ${red}D${rst}elete): "
+  fi
+
   read -rsN1
-  [ "${REPLY}" == "${escape_char}" ] && read -rsN2
+  [ "$REPLY" == "$escape_char" ] && read -rsN2
   tput el1 # clear line from escaped chars
 
-  case "${REPLY}" in
+  case "$REPLY" in
     q|Q)  echo "${NL}${green}Good bye${rst}"; exit 0;;
-    '[A') if [ ${TAB} == "L" ]; then
-            LENTRY=$(( ${LENTRY}-1 )); [ ${LENTRY} -le 1 ] && LENTRY=1
+    '[A') if [ $TAB == "L" ]; then
+            LENTRY=$(( $LENTRY-1 )); [ $LENTRY -le 1 ] && LENTRY=1
           else
-            RENTRY=$(( ${RENTRY}-1 )); [ ${RENTRY} -le 1 ] && RENTRY=1
+            RENTRY=$(( $RENTRY-1 )); [ $RENTRY -le 1 ] && RENTRY=1
           fi;;
     '[B') if [ $TAB == 'L' ]; then
-            LENTRY=$(( ${LENTRY}+1 )); [ ${LENTRY} -gt ${LcertMax} ] && LENTRY=${LcertMax}
+            LENTRY=$(( $LENTRY+1 )); [ $LENTRY -gt $LcertMax ] && LENTRY=$LcertMax
           else
-            RENTRY=$(( ${RENTRY}+1 )); [ ${RENTRY} -gt ${RcertMax} ] && RENTRY=${RcertMax}
+            RENTRY=$(( $RENTRY+1 )); [ $RENTRY -gt $RcertMax ] && RENTRY=$RcertMax
           fi;;
-    e|E)  if [ ${TAB} == "L" ]; then
-            export_cert "${LcertName[$LENTRY]}" "${LFILE}" "${LSTOREPASS}";clear
+    e|E)  if [ $TAB == "L" ]; then
+            export_cert "${LcertName[$LENTRY]}" "$LFILE" "$LSTOREPASS";clear
           else
-            export_cert "${RcertName[$RENTRY]}" "${RFILE}" "${RSTOREPASS}";clear
+            export_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS";clear
           fi;;
-    d|D)  if [ ${TAB} == "L" ]; then
+    c|C)  if [ $TAB == "L" ]; then
+            copy_cert "${LcertName[$LENTRY]}" "$LFILE" "$LSTOREPASS" "$RFILE" "$RSTOREPASS";clear
+          else
+            copy_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS" "$LFILE" "$LSTOREPASS";clear
+          fi;;
+    d|D)  if [ $TAB == "L" ]; then
             delete_cert "${LcertName[$LENTRY]}" "${LFILE}" "${LSTOREPASS}";clear
           else
             delete_cert "${RcertName[$RENTRY]}" "${RFILE}" "${RSTOREPASS}";clear
