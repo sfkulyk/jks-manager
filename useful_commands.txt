@@ -1,8 +1,0 @@
-# get certificate from web site. specify WEBSITE like "google.com:443"
-openssl s_client -connect google.com:443 -servername google.com:443 < /dev/null | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > public.crt
-
-keytool -importkeystore -srckeystore adamant.ua.jks -destkeystore truststore.jks -srcalias adamant.ua -destalias adamant.ua.2 -srcstorepass changeme -deststorepass changeme
-
-
-
-
