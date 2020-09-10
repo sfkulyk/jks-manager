@@ -1,5 +1,4 @@
 #!/bin/ksh
-. $(dirname $0)/functions.sh
 #
 # Java keystore bash manager
 #
@@ -15,53 +14,83 @@
 # * Functional key support
 # * page height implemented
 # * cOmpare certificates ( by serial No)
+# * help added
+# * auto screen height with default 15+7
+#
+
+escape_char=$(printf "\u1b")	# for keypress navigation
 
 NL="
-"
+"			# new line
+TAB="L"			# LEFT panel is default
+POSITION=1		# Screen position
+defHeight=15		# default menu height (+7)
+pageHeight=$defHeight	# active menu height
+currentRows=21		# active menu height
 
-#if [ -z "$1" ]; then
-#  echo -n "Provide keystore name (press ENTER to use default ${green}truststore.jks${rst}): "
-#  read
-#  [ -z "$REPLY" ] && FILE="truststore.jks"
-#else
-#  FILE="$1"
-#fi
-LFILE="Ltruststore.jks"
-LSTOREPASS="changeme"
-RFILE="Rtruststore.jks"
-RSTOREPASS="changeme"
+
+# load functions
+. $(dirname $0)/functions.sh
+
+# automaticaly adjust windows height if it is less then 22
+adjust_height first
+
+#for debug
+#LFILE="Ltruststore.jks"
+#LSTOREPASS="changeme"
+#RFILE="Rtruststore.jks"
+#RSTOREPASS="changeme"
+
+# Parse arguments - first keystore and store password
+if [ -n "$1" -a "$1" != "--help" ]; then
+  LFILE="$1"
+  echo -n "Provide password for ${green}$LFILE${rst}(press ENTER to use default ${green}changeme${rst} ): "
+  read
+  [ -z "$REPLY" ] && LSTOREPASS="changeme" || LSTOREPASS="$REPLY"
+else
+  help_function
+  exit 0
+fi
+
+# check if second keystore provided
+if [ -n "$2" ]; then
+  RFILE="$2"
+  echo -n "Provide password for ${green}$RFILE${rst}(press ENTER to use default ${green}changeme${rst} ): "
+  read
+  [ -z "$REPLY" ] && RSTOREPASS="changeme" || RSTOREPASS="$REPLY"
+fi
+
+# init screen
+clear
+tput init
+
+# define variables
 typeset -A LcertName LcertSerial LcertValid LcertDays Lflags
 typeset -i LcertMax=0 LENTRY=1
 typeset -A RcertName RcertSerial RcertValid RcertDays Rflags
 typeset -i RcertMax=0 RENTRY=1
 
-TAB="L"	# LEFT is default
-POSITION=1
-pageHeight=15
-
-# init left tab
+# load left tab
 init_certs "$LFILE" "$LSTOREPASS" "L"
 
-# init right tab if second file is set
+# load right tab if exists
 if [ -n "$RFILE" ]; then
   init_certs "$RFILE" "$RSTOREPASS" "R"
 fi
 
-clear
-tput init
-
-escape_char=$(printf "\u1b")
 # main loop
 while true; do
   tput home
+  adjust_height
   print_certs
-
+  
   if [ -n "$RFILE" ]; then
     echo "${NL}Choose your action (${red}Q${rst}uit, ${green}E${rst}xport, ${green}C${rst}opy, ${green}I${rst}nfo, ${red}D${rst}elete, ${green}R${rst}ename, c${green}O${rst}mpare): "
   else
     echo "${NL}Choose your action (${red}Q${rst}uit, ${green}E${rst}xport, ${green}I${rst}nfo, ${red}D${rst}elete, ${green}R${rst}ename): "
   fi
 
+  # check for pressed keys. Special keys could take up to 4 characters
   read -rsN1 keypress
   if [ "$keypress" == "$escape_char" ]; then
     read -sn1 -t 0.01 k1
@@ -110,35 +139,30 @@ while true; do
             export_cert "${LcertName[$LENTRY]}" "$LFILE" "$LSTOREPASS"
           else
             export_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS"
-          fi
-          clear;;
+          fi;;
     c|C|'[15~')  [ -z "$RFILE" ] && continue
           if [ $TAB == "L" ]; then
             copy_cert "${LcertName[$LENTRY]}" "$LFILE" "$LSTOREPASS" "$RFILE" "$RSTOREPASS"
           else
             copy_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS" "$LFILE" "$LSTOREPASS"
-          fi
-          clear;;
+          fi;;
     d|D|'[19~')  if [ $TAB == "L" ]; then
             delete_cert "${LcertName[$LENTRY]}" "${LFILE}" "${LSTOREPASS}"
           else
             delete_cert "${RcertName[$RENTRY]}" "${RFILE}" "${RSTOREPASS}"
-          fi
-          clear;;
+          fi;;
     i|I|'[13~')  if [ ${TAB} == "L" ]; then
             print_details "${LcertName[$LENTRY]}" "${LFILE}" "${LSTOREPASS}"
           else
             print_details "${RcertName[$RENTRY]}" "${RFILE}" "${RSTOREPASS}"
-          fi
-          clear;;
+          fi;;
     r|R|'[17~')  if [ $TAB == "L" ]; then
             rename_cert "${LcertName[$LENTRY]}" "$LFILE" "$LSTOREPASS"
           else
             rename_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS"
-          fi
-          clear;;
-   '	' ) [ "$TAB" == "L" ] && switch_tab R || switch_tab L
-          clear;;
+          fi;;
+   '	' ) [ "$TAB" == "L" ] && switch_tab R || switch_tab L;;
     *)    clear;;
   esac
+  clear
 done
