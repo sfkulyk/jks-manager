@@ -24,22 +24,11 @@ NL="
 "			# new line
 TAB="L"			# LEFT panel is default
 POSITION=1		# Screen position
-defHeight=15		# default menu height (+7)
-pageHeight=$defHeight	# active menu height
-currentRows=21		# active menu height
-
+pageHeight=10		# active menu height
+aliasWidth=12           # default alias witdh for dual mode
 
 # load functions
 . $(dirname $0)/functions.sh
-
-# automaticaly adjust windows height if it is less then 22
-adjust_height first
-
-#for debug
-#LFILE="Ltruststore.jks"
-#LSTOREPASS="changeme"
-#RFILE="Rtruststore.jks"
-#RSTOREPASS="changeme"
 
 # Parse arguments - first keystore and store password
 if [ -n "$1" -a "$1" != "--help" ]; then
@@ -81,13 +70,12 @@ fi
 # main loop
 while true; do
   tput home
-  adjust_height
   print_certs
   
   if [ -n "$RFILE" ]; then
-    echo "${NL}Choose your action (${red}Q${rst}uit, ${green}E${rst}xport, ${green}C${rst}opy, ${green}I${rst}nfo, ${red}D${rst}elete, ${green}R${rst}ename, c${green}O${rst}mpare): "
+    echo "${NL} F3:${green}I${rst}nfo F5:${green}C${rst}opy F6:${green}R${rst}ename F8:${red}D${rst}elete c${green}O${rst}mpare ${green}E${rst}xport F10:${red}Q${rst}uit"
   else
-    echo "${NL}Choose your action (${red}Q${rst}uit, ${green}E${rst}xport, ${green}I${rst}nfo, ${red}D${rst}elete, ${green}R${rst}ename): "
+    echo "${NL} F3:${green}I${rst}nfo F6:${green}R${rst}ename F8:${red}D${rst}elete ${green}E${rst}xport F10:${red}Q${rst}uit"
   fi
 
   # check for pressed keys. Special keys could take up to 4 characters

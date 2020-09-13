@@ -31,6 +31,21 @@ delay() {
   read -N1 -t $1
 }
 
+# automaticaly adjust windows height if it is less then 22
+adjust_height() {
+  pageHeight=$(( $(tput lines)-7 )) # 7 lines for header and footer
+  if [ $pageHeight -lt 0 ]; then
+    if [ -a -n "$1" ]; then
+      echo "Screen height is too smal. Need at least 7 rows"
+      exit 1
+    else
+      pageHeight=10 # default height
+    fi
+  fi
+  aliasWidth=$(( ( $(tput cols) - 25 ) / 2 - 1 )) # 25 cols for valid date, divider and spaces
+  [ $aliasWidth -lt 1 ] && aliasWidth=12
+}
+
 # $1: cert alias, $2: store file, $3: store pass
 delete_cert() {
   echo -n "${NL}Press ${red}y${rst}/${red}Y${rst} to delete [${green}$1${rst}] from ${green}$2${rst}: "
@@ -112,15 +127,20 @@ print_certs() {
   typeset -i cnt=$POSITION
   typeset -i commonMax=${LcertMax}
 
+  adjust_height
+
   if [ -n "$RFILE" ]; then
     [ "${RcertMax}" -gt "${LcertMax}" ] && commonMax=${RcertMax}
-    printf " store: ${blue}%-24s${rst} | store: ${blue}%-24s${rst}\n" "$LFILE" "$RFILE"
-    printf " %-10s %-20s | %-10s %-20s\n" "Valid to" "Alias" "Valid to" "Alias"
+    printf " store: ${blue}%-${aliasWidth}s${rst}     | store: ${blue}%-${aliasWidth}s${rst}\n" "$LFILE" "$RFILE"
+    printf " %-10s %-${aliasWidth}s | %-10s %-${aliasWidth}s\n" "Valid to" "Alias" "Valid to" "Alias"
   else
     printf " store: %s\n" "$LFILE"
     printf " %-10s %-32s %-20s\n" "Valid to" "Serial No" "Alias"
   fi
-  echo "-----------------------------------------------------------------"
+  delimiter=$(( $(tput cols) - 2 ))
+  printf " "
+  printf "%0.s-" {1..${delimiter}}
+  printf "\n"
 
   if [ $commonMax -gt $(( $POSITION + $pageHeight )) ]; then
     commonMax=$(($POSITION + $pageHeight))
@@ -135,7 +155,7 @@ print_certs() {
       if [ $cnt -eq $RENTRY ]; then
         [ $TAB == "R" ] && rcolor=${blueb} || rcolor=${blue}
       fi
-      printf "%1s${lcolor}%10s %-20s${rst} |%1s${rcolor}%10s %-20s${rst}\n" "${Lflags[$cnt]}" "${LcertValid[$cnt]}" "${LcertName[$cnt]}" "${Rflags[$cnt]}" "${RcertValid[$cnt]}" "${RcertName[$cnt]}"
+      printf "%1s${lcolor}%10s %-${aliasWidth}s${rst} |%1s${rcolor}%10s %-${aliasWidth}s${rst}\n" "${Lflags[$cnt]}" "${LcertValid[$cnt]}" "${LcertName[$cnt]}" "${Rflags[$cnt]}" "${RcertValid[$cnt]}" "${RcertName[$cnt]}"
     else
       [ $cnt -eq $LENTRY ] && lcolor="${blueb}" || lcolor=""
       printf " ${lcolor}%10s %32s %-20s${rst}\n" "${LcertValid[$cnt]}" ${LcertSerial[$cnt]} "${LcertName[$cnt]}"
@@ -320,21 +340,4 @@ compare_certs() {
     done
     lcnt=$(($lcnt+1))
   done
-}
-
-# automaticaly adjust windows height if it is less then 22
-adjust_height() {
-  localRows=$(tput lines)
-  echo "localRows: $localRows, currentRows: $currentRows, pageHeight: $pageHeight"
-  if [ -n "$1" -o $localRows != $currentRows ]; then
-    pageHeight=$defHeight
-    if [ $(($pageHeight+7)) -gt $localRows ]; then
-      pageHeight=$(($localRows-7))
-      if [ $pageHeight -lt 0 -a -n "$1" ]; then
-        echo "screen height is too smal. Need at least 8 rows"
-        exit 1
-      fi
-      currentRows=$localRows
-    fi
-  fi
 }
