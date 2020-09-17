@@ -16,6 +16,8 @@
 # * cOmpare certificates ( by serial No)
 # * help added
 # * auto screen height with default 15+7
+# * adjust width for certificates with very long alias name
+# * certificate names could contains other characters like ()
 #
 
 escape_char=$(printf "\u1b")	# for keypress navigation
