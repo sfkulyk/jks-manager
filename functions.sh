@@ -103,20 +103,24 @@ delete_cert() {
 
 # $1 - store file, $2 - store pass, $3 - tab (L or R)
 init_certs() {
-  localTAB=$3
   echo "Opening ${green}$1${rst} ... as ${localTAB}"
   typeset -i cnt=1
   while read; do
     if expr "$REPLY" : "Alias name: ">/dev/null; then
-      localAlias="${REPLY##*: }"
+      [ "$3" == R ] && RcertName[$cnt]="${REPLY##*: }" || LcertName[$cnt]="${REPLY##*: }"
     elif expr "$REPLY" : "Serial number: ">/dev/null; then
-      eval ${localTAB}certSerial[$cnt]="${REPLY##*: }"
+      [ "$3" == R ] && RcertSerial[$cnt]="${REPLY##*: }" || LcertSerial[$cnt]="${REPLY##*: }"
     else
-      eval ${localTAB}certName[$cnt]="${localAlias}"
-      eval ${localTAB}certValid[$cnt]=$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d")
       validunix=$(/bin/date --date="${REPLY##*until: }" "+%s")
-      eval ${localTAB}certDays[$cnt]=$(( (${validunix} - $(/bin/date "+%s")) / 3600 / 24 ))
-      eval ${localTAB}certMax=$cnt
+      if [ "$3" == R ]; then
+        RcertValid[$cnt]=$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d")
+        RcertDays[$cnt]=$(( (${validunix} - $(/bin/date "+%s")) / 3600 / 24 ))
+        RcertMax=$cnt
+      else
+        LcertValid[$cnt]=$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d")
+        LcertDays[$cnt]=$(( (${validunix} - $(/bin/date "+%s")) / 3600 / 24 ))
+        LcertMax=$cnt
+      fi
       cnt+=1
     fi
   done<<<$(keytool -list -v -keystore "$1" -storepass "$2"|grep -P "(Alias name:|Serial number:|Valid from:)"|grep "Alias name:" -A 2)
@@ -135,7 +139,7 @@ print_certs() {
     printf " %-10s %-${aliasWidth}s | %-10s %-${aliasWidth}s\n" "Valid to" "Alias" "Valid to" "Alias"
   else
     printf " store: %s\n" "$LFILE"
-    printf " %-10s %-32s %-20s\n" "Valid to" "Serial No" "Alias"
+    printf " %-10s %-39s %s\n" "Valid to" "Serial No" "Alias"
   fi
   delimiter=$(( $(tput cols) - 2 ))
   printf " "
@@ -155,10 +159,12 @@ print_certs() {
       if [ $cnt -eq $RENTRY ]; then
         [ $TAB == "R" ] && rcolor=${blueb} || rcolor=${blue}
       fi
-      printf "%1s${lcolor}%10s %-${aliasWidth}s${rst} |%1s${rcolor}%10s %-${aliasWidth}s${rst}\n" "${Lflags[$cnt]}" "${LcertValid[$cnt]}" "${LcertName[$cnt]}" "${Rflags[$cnt]}" "${RcertValid[$cnt]}" "${RcertName[$cnt]}"
+      lname="${LcertName[$cnt]:0:$aliasWidth}"
+      rname="${RcertName[$cnt]:0:$aliasWidth}"
+      printf "%1s${lcolor}%10s %-${aliasWidth}s${rst} |%1s${rcolor}%10s %-${aliasWidth}s${rst}\n" "${Lflags[$cnt]}" "${LcertValid[$cnt]}" "$lname" "${Rflags[$cnt]}" "${RcertValid[$cnt]}" "$rname"
     else
       [ $cnt -eq $LENTRY ] && lcolor="${blueb}" || lcolor=""
-      printf " ${lcolor}%10s %32s %-20s${rst}\n" "${LcertValid[$cnt]}" ${LcertSerial[$cnt]} "${LcertName[$cnt]}"
+      printf " ${lcolor}%10s %39s %s${rst}\n" "${LcertValid[$cnt]}" ${LcertSerial[$cnt]} "${LcertName[$cnt]}"
     fi
     cnt+=1
   done

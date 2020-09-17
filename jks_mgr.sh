@@ -3,7 +3,7 @@
 # Java keystore bash manager
 #
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.1
+# Version 1.2
 # * List of certificates in JKS
 # * View some details (Alias, Serial, Valid date)
 # * Export to JKS, PKCS12, CRT
@@ -49,10 +49,6 @@ if [ -n "$2" ]; then
   [ -z "$REPLY" ] && RSTOREPASS="changeme" || RSTOREPASS="$REPLY"
 fi
 
-# init screen
-clear
-tput init
-
 # define variables
 typeset -A LcertName LcertSerial LcertValid LcertDays Lflags
 typeset -i LcertMax=0 LENTRY=1
@@ -67,6 +63,7 @@ if [ -n "$RFILE" ]; then
   init_certs "$RFILE" "$RSTOREPASS" "R"
 fi
 
+clear
 # main loop
 while true; do
   tput home
@@ -97,12 +94,14 @@ while true; do
             if [ $POSITION -gt $LENTRY ]; then
               POSITION=$(($POSITION-1))
               [ $POSITION -le 1 ] && POSITION=1
+              clear
             fi
           else
             RENTRY=$(( $RENTRY-1 )); [ $RENTRY -lt 1 ] && RENTRY=1
             if [[ $POSITION -gt $RENTRY ]]; then
               POSITION=$(($POSITION-1))
               [ $POSITION -le 1 ] && POSITION=1
+              clear
             fi
           fi;;
     '[B') if [ $TAB == 'L' ]; then
@@ -111,6 +110,7 @@ while true; do
             if [[ $(($POSITION+$pageHeight)) -lt $LENTRY ]]; then
               POSITION=$(($POSITION+1))
               [ $POSITION -gt $LcertMax ] && POSITION=$LcertMax
+              clear
             fi
           else
             RENTRY=$(( $RENTRY+1 ))
@@ -118,39 +118,45 @@ while true; do
             if [[ $(($POSITION+$pageHeight)) -lt $RENTRY ]]; then
               POSITION=$(( $POSITION + 1))
               [ $POSITION -gt $RcertMax ] && POSITION=$RcertMax
+              clear
             fi
           fi;;
    '[D')  switch_tab L;;
    '[C')  switch_tab R;;
-    o|O)  compare_certs;;
+    o|O)  compare_certs; clear;;
     e|E)  if [ $TAB == "L" ]; then
             export_cert "${LcertName[$LENTRY]}" "$LFILE" "$LSTOREPASS"
           else
             export_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS"
-          fi;;
+          fi
+          clear;;
     c|C|'[15~')  [ -z "$RFILE" ] && continue
           if [ $TAB == "L" ]; then
             copy_cert "${LcertName[$LENTRY]}" "$LFILE" "$LSTOREPASS" "$RFILE" "$RSTOREPASS"
           else
             copy_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS" "$LFILE" "$LSTOREPASS"
-          fi;;
+          fi
+          clear;;
     d|D|'[19~')  if [ $TAB == "L" ]; then
             delete_cert "${LcertName[$LENTRY]}" "${LFILE}" "${LSTOREPASS}"
           else
             delete_cert "${RcertName[$RENTRY]}" "${RFILE}" "${RSTOREPASS}"
-          fi;;
+          fi
+          clear;;
     i|I|'[13~')  if [ ${TAB} == "L" ]; then
             print_details "${LcertName[$LENTRY]}" "${LFILE}" "${LSTOREPASS}"
           else
             print_details "${RcertName[$RENTRY]}" "${RFILE}" "${RSTOREPASS}"
-          fi;;
+          fi
+          clear;;
     r|R|'[17~')  if [ $TAB == "L" ]; then
             rename_cert "${LcertName[$LENTRY]}" "$LFILE" "$LSTOREPASS"
           else
             rename_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS"
-          fi;;
-   '	' ) [ "$TAB" == "L" ] && switch_tab R || switch_tab L;;
+          fi
+          clear;;
+   '	' ) [ "$TAB" == "L" ] && switch_tab R || switch_tab L
+          clear;;
     *)    clear;;
   esac
-  clear
 done
