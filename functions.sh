@@ -12,17 +12,17 @@ blueb=$(tput bold;tput setab 6)
 rst=$(tput sgr0)
 
 help_function() {
-  echo "	${blue}Bash java keystore manager${rst}"
-  echo "	(C) Sergii Kulyk aka Saboteur"
+  echo "    ${blue}Bash java keystore manager${rst}"
+  echo "    (C) Sergii Kulyk aka Saboteur"
   echo "${NL} Usage:"
-  echo "	${blue}jks_mgr.sh store.jks [store2.jks]${rst}"
+  echo "    ${blue}jks_mgr.sh store.jks [store2.jks]${rst}"
   echo "${NL} Requirements:"
-  echo "	keytool from jdk should be available in PATH, standard GNU tools"
+  echo "    keytool from jdk should be available in PATH, standard GNU tools"
   echo "${NL} Features:"
-  echo "	View list of certificates in storage"
-  echo "	Available commands: view details, rename, delete, export to JKS, PKCS12, CER formats"
-  echo "	If two stores provided, you can view them in two-panel mode"
-  echo "	Also in two-panel mode additional commands available: copy and compare${NL}"
+  echo "    View list of certificates in storage"
+  echo "    Available commands: view details, rename, delete, export to JKS, PKCS12, CER formats"
+  echo "    If two stores provided, you can view them in two-panel mode"
+  echo "    Also in two-panel mode additional commands available: copy and compare${NL}"
 }
 
 # $1 seconds, $2 text
@@ -103,27 +103,30 @@ delete_cert() {
 
 # $1 - store file, $2 - store pass, $3 - tab (L or R)
 init_certs() {
+  [ -n "$3" ] && localTAB=$3 || localTAB=L
   echo "Opening ${green}$1${rst} ... as ${localTAB}"
   typeset -i cnt=1
   while read; do
-    if expr "$REPLY" : "Alias name: ">/dev/null; then
-      [ "$3" == R ] && RcertName[$cnt]="${REPLY##*: }" || LcertName[$cnt]="${REPLY##*: }"
+    if [ "$REPLY" == "--" ]; then
+       continue
+    elif expr "$REPLY" : "Alias name: ">/dev/null; then
+      [ "$localTAB" == L ] && LcertName[$cnt]="${REPLY##*: }" || RcertName[$cnt]="${REPLY##*: }"
     elif expr "$REPLY" : "Serial number: ">/dev/null; then
-      [ "$3" == R ] && RcertSerial[$cnt]="${REPLY##*: }" || LcertSerial[$cnt]="${REPLY##*: }"
+      [ "$localTAB" == L ] && LcertSerial[$cnt]="${REPLY##*: }" || RcertSerial[$cnt]="${REPLY##*: }"
     else
       validunix=$(/bin/date --date="${REPLY##*until: }" "+%s")
-      if [ "$3" == R ]; then
-        RcertValid[$cnt]=$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d")
-        RcertDays[$cnt]=$(( (${validunix} - $(/bin/date "+%s")) / 3600 / 24 ))
-        RcertMax=$cnt
+      if [ "$localTAB" == L ]; then
+           LcertValid[$cnt]=$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d") || RcertValid[$cnt]=$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d")
+           LcertDays[$cnt]=$(( (${validunix} - $(/bin/date "+%s")) / 3600 / 24 ))
+           LcertMax=$cnt
       else
-        LcertValid[$cnt]=$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d")
-        LcertDays[$cnt]=$(( (${validunix} - $(/bin/date "+%s")) / 3600 / 24 ))
-        LcertMax=$cnt
+           RcertValid[$cnt]=$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d") || RcertValid[$cnt]=$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d")
+           RcertDays[$cnt]=$(( (${validunix} - $(/bin/date "+%s")) / 3600 / 24 ))
+           RcertMax=$cnt
       fi
       cnt+=1
     fi
-  done<<<$(keytool -list -v -keystore "$1" -storepass "$2"|grep -P "(Alias name:|Serial number:|Valid from:)"|grep "Alias name:" -A 2)
+  done<<<"$(keytool -list -v -keystore $1 -storepass $2|grep -P '(Alias name:|Serial number:|Valid from:)'|grep 'Alias name:' -A 2)"
 }
 
 # no args. if RFILE is not empty, print dual-tab
@@ -139,7 +142,11 @@ print_certs() {
     printf " %-10s %-${aliasWidth}s | %-10s %-${aliasWidth}s\n" "Valid to" "Alias" "Valid to" "Alias"
   else
     printf " store: %s\n" "$LFILE"
-    printf " %-10s %-39s %s\n" "Valid to" "Serial No" "Alias"
+    if [ -n "$SHOW_SERIAL" ]; then
+      printf " %-10s %-39s %s\n" "Valid to" "Serial No" "Alias"
+    else
+      printf " %-10s %s\n" "Valid to" "Alias"
+    fi
   fi
   delimiter=$(( $(tput cols) - 2 ))
   printf " "
@@ -159,12 +166,16 @@ print_certs() {
       if [ $cnt -eq $RENTRY ]; then
         [ $TAB == "R" ] && rcolor=${blueb} || rcolor=${blue}
       fi
-      lname="${LcertName[$cnt]:0:$aliasWidth}"
-      rname="${RcertName[$cnt]:0:$aliasWidth}"
-      printf "%1s${lcolor}%10s %-${aliasWidth}s${rst} |%1s${rcolor}%10s %-${aliasWidth}s${rst}\n" "${Lflags[$cnt]}" "${LcertValid[$cnt]}" "$lname" "${Rflags[$cnt]}" "${RcertValid[$cnt]}" "$rname"
+      lalias=${LcertName[$cnt]:0:$aliasWidth}
+      ralias=${RcertName[$cnt]:0:$aliasWidth}
+      printf "%1s${lcolor}%10s %-${aliasWidth}s${rst} |%1s${rcolor}%10s %-${aliasWidth}s${rst}\n" "${Lflags[$cnt]}" "${LcertValid[$cnt]}" "$lalias" "${Rflags[$cnt]}" "${RcertValid[$cnt]}" "$ralias"
     else
       [ $cnt -eq $LENTRY ] && lcolor="${blueb}" || lcolor=""
-      printf " ${lcolor}%10s %39s %s${rst}\n" "${LcertValid[$cnt]}" ${LcertSerial[$cnt]} "${LcertName[$cnt]}"
+      if [ -n "$SHOW_SERIAL" ]; then
+        printf " ${lcolor}%10s %-39s %s${rst}\n" "${LcertValid[$cnt]}" ${LcertSerial[$cnt]} "${LcertName[$cnt]}"
+      else
+        printf " ${lcolor}%10s %s${rst}\n" "${LcertValid[$cnt]}" "${LcertName[$cnt]}"
+      fi
     fi
     cnt+=1
   done
@@ -225,9 +236,7 @@ print_details() {
     localDays=${RcertDays[$RENTRY]}
   fi
   echo "${NL}Details for certificate [${green}${localAlias}${rst}]:"
-  echo "Serial number: ${localSerial}"
-  echo "Valid to: ${localValid}"
-  echo "Days left: ${localDays}"
+  keytool -list -v -alias "$localAlias" -keystore "$2" -storepass "$3" 2>/dev/null| sed -n '/Alias:/p;/Creation date:/p;/Owner:/p;/Issuer:/p;/Serial number:/p;/Valid from:/p;/DNSName:/p'
   echo "${NL}Press any key"
   read -rsn1
 }
@@ -347,3 +356,4 @@ compare_certs() {
     lcnt=$(($lcnt+1))
   done
 }
+
