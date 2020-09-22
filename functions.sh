@@ -33,17 +33,25 @@ delay() {
 
 # automaticaly adjust windows height if it is less then 22
 adjust_height() {
-  pageHeight=$(( $(tput lines)-7 )) # 7 lines for header and footer
-  if [ $pageHeight -lt 0 ]; then
-    if [ -a -n "$1" ]; then
-      echo "Screen height is too smal. Need at least 7 rows"
-      exit 1
-    else
-      pageHeight=10 # default height
+  localHeight=$(( $(tput lines)-7 )) # 7 lines for header and footer
+  if [ $pageHeight -ne $localHeight ]; then
+    pageHeight=$localHeight
+    if [ $pageHeight -lt 0 ]; then
+      if [ -a -n "$1" ]; then
+        echo "Screen height is too smal. Need at least 7 rows"
+        exit 1
+      else
+        pageHeight=10 # default height
+      fi
     fi
+    clear
   fi
-  aliasWidth=$(( ( $(tput cols) - 25 ) / 2 - 1 )) # 25 cols for valid date, divider and spaces
-  [ $aliasWidth -lt 1 ] && aliasWidth=12
+  localWidth=$(( ( $(tput cols) - 25 ) / 2 - 1 )) # 25 cols for valid date, divider and spaces
+  if [ $localWidth -ne $aliasWidth ]; then
+    aliasWidth=$localWidth
+    [ $aliasWidth -lt 1 ] && aliasWidth=12
+    clear
+  fi
 }
 
 # $1: cert alias, $2: store file, $3: store pass
@@ -150,7 +158,7 @@ print_certs() {
   fi
   delimiter=$(( $(tput cols) - 2 ))
   printf " "
-  printf "%0.s-" {1..${delimiter}}
+  eval printf "%0.s-" {1..${delimiter}}
   printf "\n"
 
   if [ $commonMax -gt $(( $POSITION + $pageHeight )) ]; then
@@ -166,15 +174,14 @@ print_certs() {
       if [ $cnt -eq $RENTRY ]; then
         [ $TAB == "R" ] && rcolor=${blueb} || rcolor=${blue}
       fi
-      lalias=${LcertName[$cnt]:0:$aliasWidth}
-      ralias=${RcertName[$cnt]:0:$aliasWidth}
-      printf "%1s${lcolor}%10s %-${aliasWidth}s${rst} |%1s${rcolor}%10s %-${aliasWidth}s${rst}\n" "${Lflags[$cnt]}" "${LcertValid[$cnt]}" "$lalias" "${Rflags[$cnt]}" "${RcertValid[$cnt]}" "$ralias"
+      printf "%1s${lcolor}%10s %-${aliasWidth}s${rst} |%1s${rcolor}%10s %-${aliasWidth}s${rst}\n" "${Lflags[$cnt]}" "${LcertValid[$cnt]}" "${LcertName[$cnt]:0:$aliasWidth}" "${Rflags[$cnt]}" "${RcertValid[$cnt]}" "${RcertName[$cnt]:0:$aliasWidth}"
     else
       [ $cnt -eq $LENTRY ] && lcolor="${blueb}" || lcolor=""
       if [ -n "$SHOW_SERIAL" ]; then
         printf " ${lcolor}%10s %-39s %s${rst}\n" "${LcertValid[$cnt]}" ${LcertSerial[$cnt]} "${LcertName[$cnt]}"
       else
-        printf " ${lcolor}%10s %s${rst}\n" "${LcertValid[$cnt]}" "${LcertName[$cnt]}"
+        localWidth=$(( $(tput cols) - 13 ))
+        printf " ${lcolor}%10s %-${aliasWidth}s${rst}\n" "${LcertValid[$cnt]}" "${LcertName[$cnt]:0:$localWidth}"
       fi
     fi
     cnt+=1
