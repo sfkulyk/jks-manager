@@ -17,16 +17,21 @@
 # * auto screen height with default 15+7
 # * View certificate details, fixed F3 button
 # * Auto screen width, Certificate alias can be shortened to fit the screen
-#
 
-default_jks_pwd="changeit"
-escape_char=$(printf "\u1b")    # for keypress navigation
-TAB="L"         # LEFT panel is default
+default_store_pwd="changeit"
+escape_char=$(printf "\u1b") # for keypress navigation
+TAB="L"         # LEFT panel is default (for single mode)
 POSITION=1      # Screen position
-pageHeight=10       # active menu height
-aliasWidth=12           # default alias witdh for dual mode
+pageHeight=10   # active menu height
+aliasWidth=12   # default alias width for dual mode
+compareFlag=0
 NL="
-"           # new line
+"               # new line
+# define variables
+typeset -A LcertName LcertSerial LcertValid LcertDays Lflags
+typeset -i LcertMax=0 LENTRY=1
+typeset -A RcertName RcertSerial RcertValid RcertDays Rflags
+typeset -i RcertMax=0 RENTRY=1
 # colors
 red=$(tput bold;tput setaf 1)
 green=$(tput bold;tput setaf 2)
@@ -48,14 +53,14 @@ help_function() {
   echo "    Also in two-panel mode additional commands available: copy and compare${NL}"
 }
 
-# wait for x seconds or continue on pressing enter
+# function wait for x seconds or continue on pressing enter
 # $1 seconds, $2 text
 delay() {
   echo "$2"
   read -N1 -t $1
 }
 
-# automaticaly adjust windows height if it is less then 22
+# function automaticaly adjust windows height if it is less then 22
 adjust_height() {
   localHeight=$(( $(tput lines)-7 )) # 7 lines for header and footer
   if [ $pageHeight -ne $localHeight ]; then
@@ -78,7 +83,7 @@ adjust_height() {
   fi
 }
 
-# $1: cert alias, $2: store file, $3: store pass
+# function $1: cert alias, $2: store file, $3: store pass
 delete_cert() {
   echo -n "${NL}Press ${red}y${rst}/${red}Y${rst} to delete [${green}$1${rst}] from ${green}$2${rst}: "
   read -N1
@@ -130,9 +135,11 @@ delete_cert() {
   eval unset ${TAB}certValid[$cnt]
   eval unset ${TAB}certDays[$cnt]
   eval unset ${TAB}flags[$cnt]
+  [ compareFlag == "1" ] && compare_certs
   delay 2 "Certificate ${blue}$1${rst} succesfully removed from ${blue}$2${rst}"
 }
 
+# function to read certs from keystore
 # $1 - store file, $2 - store pass, $3 - tab (L or R)
 init_certs() {
   [ -n "$3" ] && localTAB=$3 || localTAB=L
@@ -161,6 +168,7 @@ init_certs() {
   done<<<"$(keytool -list -v -keystore $1 -storepass $2|grep -P '(Alias name:|Serial number:|Valid from:)'|grep 'Alias name:' -A 2)"
 }
 
+# re-print screen
 # no args. if RFILE is not empty, print dual-tab
 print_certs() {
   typeset -i cnt=$POSITION
@@ -223,7 +231,11 @@ export_cert() {
              echo -n "${NL}Provide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
              read
              [ -n "$REPLY" ] && FILENAME="$REPLY"
-             keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$3" -deststoretype jks
+             DESTPASS="${default_store_pwd}"
+             echo -n "${NL}Provide password for $FILENAME (press ENTER to use: ${green}${DESTPASS}${rst}) :"
+             read
+             [ -n "$REPLY" ] && DESTPASS="$REPLY"
+             keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$DESTPASS" -deststoretype jks
              if [ $? -eq 0 ]; then
                delay 2 echo "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}"
              else
@@ -233,7 +245,11 @@ export_cert() {
              echo -n "${NL}Provide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
              read
              [ -n "$REPLY" ] && FILENAME="$REPLY"
-             keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$3" -deststoretype pkcs12
+             DESTPASS="${default_store_pwd}"
+             echo -n "${NL}Provide password for $FILENAME (press ENTER to use: ${green}${DESTPASS}${rst}) :"
+             read
+             [ -n "$REPLY" ] && DESTPASS="$REPLY"
+             keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$DESTPASS" -deststoretype pkcs12
              if [ $? -eq 0 ]; then
                delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}"
              else
@@ -253,7 +269,7 @@ export_cert() {
   done
 }
 
-# no args
+# print certificate details
 print_details() {
   if [ $TAB == "L" ]; then
     localAlias=${LcertName[$LENTRY]}
@@ -301,6 +317,7 @@ copy_cert() {
     LcertValid[${LcertMax}]=${RcertValid[${RENTRY}]}
     LcertDays[${LcertMax}]=${RcertDays[${RENTRY}]}
   fi
+  [ compareFlag == "1" ] && compare_certs
   delay 2 "Certificate ${blue}$1${rst} succesfully copyed from ${blue}$2${rst} to ${blue}$4${rst}"
 }
 
@@ -358,7 +375,7 @@ switch_tab() {
   fi
 }
 
-# No args
+# Compare certificates by serial number and put * if found matched
 compare_certs() {
   typeset -i lcnt=1 rcnt=1
 
@@ -386,33 +403,28 @@ compare_certs() {
     done
     lcnt=$(($lcnt+1))
   done
+  compareFlag=1
 }
 
-# Begin main
-# Parse arguments - first keystore and store password
+# Begin main program
+# Parse arguments - if first provided for left menu
 if [ -n "$1" -a "$1" != "--help" ]; then
   LFILE="$1"
-  echo -n "Provide password for ${green}$LFILE${rst}(press ENTER to use default ${green}${default_jks_pwd}${rst} ): "
+  echo -n "Provide password for ${green}$LFILE${rst}(press ENTER to use default ${green}${default_store_pwd}${rst} ): "
   read
-  [ -z "$REPLY" ] && LSTOREPASS="$default_jks_pwd" || LSTOREPASS="$REPLY"
+  [ -z "$REPLY" ] && LSTOREPASS="$default_store_pwd" || LSTOREPASS="$REPLY"
 else
   help_function
   exit 0
 fi
 
-# check if second keystore provided
+# Parse arguments - if second provided for dual-mode
 if [ -n "$2" ]; then
   RFILE="$2"
-  echo -n "Provide password for ${green}$RFILE${rst}(press ENTER to use default ${green}${default_jks_pwd}${rst} ): "
+  echo -n "Provide password for ${green}$RFILE${rst}(press ENTER to use default ${green}${default_store_pwd}${rst} ): "
   read
-  [ -z "$REPLY" ] && RSTOREPASS="$default_jks_pwd" || RSTOREPASS="$REPLY"
+  [ -z "$REPLY" ] && RSTOREPASS="$default_store_pwd" || RSTOREPASS="$REPLY"
 fi
-
-# define variables
-typeset -A LcertName LcertSerial LcertValid LcertDays Lflags
-typeset -i LcertMax=0 LENTRY=1
-typeset -A RcertName RcertSerial RcertValid RcertDays Rflags
-typeset -i RcertMax=0 RENTRY=1
 
 # load left tab
 init_certs "$LFILE" "$LSTOREPASS" "L"
@@ -515,4 +527,3 @@ while true; do
     *)    clear;;
   esac
 done
-
