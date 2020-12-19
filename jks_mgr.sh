@@ -135,7 +135,7 @@ delete_cert() {
   eval unset ${TAB}certValid[$cnt]
   eval unset ${TAB}certDays[$cnt]
   eval unset ${TAB}flags[$cnt]
-  [ compareFlag == "1" ] && compare_certs
+  [ compareFlag -eq 1  ] && compare_certs
   delay 2 "Certificate ${blue}$1${rst} succesfully removed from ${blue}$2${rst}"
 }
 
@@ -317,7 +317,7 @@ copy_cert() {
     LcertValid[${LcertMax}]=${RcertValid[${RENTRY}]}
     LcertDays[${LcertMax}]=${RcertDays[${RENTRY}]}
   fi
-  [ compareFlag == "1" ] && compare_certs
+  [ compareFlag -eq 1 ] && compare_certs
   delay 2 "Certificate ${blue}$1${rst} succesfully copyed from ${blue}$2${rst} to ${blue}$4${rst}"
 }
 
