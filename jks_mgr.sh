@@ -3,7 +3,7 @@
 # Java keystore bash manager
 #
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.3
+# Version 1.4
 # * List of certificates in JKS
 # * Export to JKS, PKCS12, CRT
 # * Delete certificate
@@ -17,6 +17,8 @@
 # * auto screen height with default 15+7
 # * View certificate details, fixed F3 button
 # * Auto screen width, Certificate alias can be shortened to fit the screen
+# * Add import certificate from web site
+#
 
 default_store_pwd="changeit"
 escape_char=$(printf "\u1b") # for keypress navigation
@@ -304,21 +306,82 @@ copy_cert() {
     return
   fi
 
+  typeset -i counter=0
   if [ "$TAB" == "L" ]; then
-    RcertMax=$((${RcertMax}+1))
-    RcertName[${RcertMax}]=${LcertName[${LENTRY}]}
-    RcertSerial[${RcertMax}]=${LcertSerial[${LENTRY}]}
-    RcertValid[${RcertMax}]=${LcertValid[${LENTRY}]}
-    RcertDays[${RcertMax}]=${LcertDays[${LENTRY}]}
+    while [ $counter -le ${RcertMax} ]; do
+      if [ "${RcertName[${counter}]}" == "${LcertName[${LENTRY}]}" ]; then
+        break
+      fi
+      counter=$(($counter+1))
+    done
+    if [ $counter -gt $RcertMax ]; then
+      RcertMax=$((${RcertMax}+1))
+    fi
+    RcertName[${counter}]=${LcertName[${LENTRY}]}
+    RcertSerial[${counter}]=${LcertSerial[${LENTRY}]}
+    RcertValid[${counter}]=${LcertValid[${LENTRY}]}
+    RcertDays[${counter}]=${LcertDays[${LENTRY}]}
   else
-    LcertMax=$((${LcertMax}+1))
-    LcertName[${LcertMax}]=${RcertName[${RENTRY}]}
-    LcertSerial[${LcertMax}]=${RcertSerial[${RENTRY}]}
-    LcertValid[${LcertMax}]=${RcertValid[${RENTRY}]}
-    LcertDays[${LcertMax}]=${RcertDays[${RENTRY}]}
+    while [ $counter -le ${LcertMax} ]; do
+      if [ "${LcertName[${counter}]}" == "${RcertName[${RENTRY}]}" ]; then
+        break
+      fi
+      counter=$(($counter+1))
+    done
+    if [ $counter -gt $LcertMax ]; then
+      LcertMax=$((${LcertMax}+1))
+    fi
+    LcertName[${counter}]=${RcertName[${RENTRY}]}
+    LcertSerial[${counter}]=${RcertSerial[${RENTRY}]}
+    LcertValid[${counter}]=${RcertValid[${RENTRY}]}
+    LcertDays[${counter}]=${RcertDays[${RENTRY}]}
   fi
   [ compareFlag -eq 1 ] && compare_certs
-  delay 2 "Certificate ${blue}$1${rst} succesfully copyed from ${blue}$2${rst} to ${blue}$4${rst}"
+  delay 2 "Certificate ${blue}$1${rst} succesfully copied from ${blue}$2${rst} to ${blue}$4${rst}"
+}
+
+# import certificate from provided web-site to active keystore
+import_from_www() {
+  echo -n "${NL}Please enter URL without https - [${green}site${rst}] or [${green}site:port${rst}] (or empty string to cancel): "
+  read URL
+  if [ -n "$URL" ]; then
+    SITE=$(echo "$URL"|cut -d: -f1)
+    echo "$URL"|grep :>/dev/null
+    if [ $? -eq 0 ]; then
+      PORT=$(echo "$URL"|cut -d: -f2)
+    else
+      PORT="443"
+    fi
+    echo "${NL}${blue}Getting certificate from [$SITE:$PORT]${rst}"
+    openssl s_client -showcerts -connect "$SITE:$PORT" </dev/null 2>/dev/null|openssl x509 -outform PEM >temp.pem
+    if [ $? -ne 0 ]; then
+      delay 5 echo "${red}Unable to download certificate from $SITE:$PORT${rst}"
+      rm temp.pem
+      return
+    fi
+    if [ "$TAB" == "L" ]; then
+      storefile=$LFILE
+      storepass=$LSTOREPASS
+    else
+      storefile=$RFILE
+      storepass=$RSTOREPASS
+    fi
+    keytool -import -file temp.pem -keystore "$storefile" -storepass "$storepass" -noprompt -alias "$SITE"
+    if [ $? -ne 0 ]; then
+      delay 5 echo "${red}Can't add certificate to keystore${rst}"
+      rm temp.pem
+      return
+    fi
+    delay 2 echo "${blue}Certificate $SITE was imported to $storefile${rst}"
+    if [ "$TAB" == "L" ]; then
+      init_certs "$LFILE" "$LSTOREPASS" "L"
+    else
+      init_certs "$RFILE" "$RSTOREPASS" "R"
+    fi
+    [ compareFlag -eq 1 ] && compare_certs
+  else
+    delay 5 "${NL}${red}Cancelled.${rst}"
+  fi
 }
 
 # $1 source alias, $2 store file $3 store pass
@@ -443,9 +506,9 @@ while true; do
   print_certs
   
   if [ -n "$RFILE" ]; then
-    echo "${NL} F3:${green}I${rst}nfo F5:${green}C${rst}opy F6:${green}R${rst}ename F8:${red}D${rst}elete c${green}O${rst}mpare ${green}E${rst}xport F10:${red}Q${rst}uit"
+    echo "${NL} F3:${green}I${rst}nfo F5:${green}C${rst}opy F6:${green}R${rst}ename F8:${red}D${rst}elete c${green}O${rst}mpare ${green}E${rst}xport i${green}M${rst}port  F10:${red}Q${rst}uit"
   else
-    echo "${NL} F3:${green}I${rst}nfo F6:${green}R${rst}ename F8:${red}D${rst}elete ${green}E${rst}xport F10:${red}Q${rst}uit"
+    echo "${NL} F3:${green}I${rst}nfo F6:${green}R${rst}ename F8:${red}D${rst}elete ${green}E${rst}xport i${green}M${rst}port F10:${red}Q${rst}uit"
   fi
 
   # check for pressed keys. Special keys could take up to 4 characters
@@ -524,6 +587,7 @@ while true; do
             rename_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS"
           fi;clear;;
    '	' ) [ "$TAB" == "L" ] && switch_tab R || switch_tab L;;
+   m|M)  import_from_www;clear;;
     *)    clear;;
   esac
 done
