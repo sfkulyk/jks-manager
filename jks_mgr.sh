@@ -3,7 +3,7 @@
 # Java keystore bash manager
 #
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.4
+# Version 1.5
 # * List of certificates in JKS
 # * Export to JKS, PKCS12, CRT
 # * Delete certificate
@@ -18,6 +18,8 @@
 # * View certificate details, fixed F3 button
 # * Auto screen width, Certificate alias can be shortened to fit the screen
 # * Add import certificate from web site
+# * Add colors for certificate expiration (yellow for <60 days, red for <20 days)
+# * add show serial feature to single-panel mode
 #
 
 default_store_pwd="changeit"
@@ -36,10 +38,14 @@ typeset -A RcertName RcertSerial RcertValid RcertDays Rflags
 typeset -i RcertMax=0 RENTRY=1
 # colors
 red=$(tput bold;tput setaf 1)
+redb=$(tput bold;tput setab 6;tput setaf 1)
 green=$(tput bold;tput setaf 2)
 blue=$(tput bold;tput setaf 6)
 blueb=$(tput bold;tput setab 6)
+yellow=$(tput bold;tput setaf 3)
+yellowb=$(tput bold;tput setab 6;tput setaf 3)
 rst=$(tput sgr0)
+SHOW_SERIAL=""
 
 help_function() {
   echo "    ${blue}Bash java keystore manager${rst}"
@@ -208,14 +214,37 @@ print_certs() {
       if [ $cnt -eq $RENTRY ]; then
         [ $TAB == "R" ] && rcolor=${blueb} || rcolor=${blue}
       fi
-      printf "%1s${lcolor}%10s %-${aliasWidth}s${rst} |%1s${rcolor}%10s %-${aliasWidth}s${rst}\n" "${Lflags[$cnt]}" "${LcertValid[$cnt]}" "${LcertName[$cnt]:0:$aliasWidth}" "${Rflags[$cnt]}" "${RcertValid[$cnt]}" "${RcertName[$cnt]:0:$aliasWidth}"
+
+      if [ "${LcertDays[$cnt]}" -lt 20 ]; then
+        lvcolor="${lcolor}${red}"
+      elif [ "${LcertDays[$cnt]}" -lt 60 ]; then
+        lvcolor="${lcolor}${yellow}"
+      else
+        lvcolor="${lcolor}"
+      fi
+      if [ "${RcertDays[$cnt]}" -lt 20 ]; then
+        rvcolor="${rcolor}${red}"
+      elif [ "${RcertDays[$cnt]}" -lt 60 ]; then
+        rvcolor="${rcolor}${yellow}"
+      else
+        rvcolor="${rcolor}"
+      fi
+
+      printf "%1s${lvcolor}%10s${rst}${lcolor} %-${aliasWidth}s${rst} |%1s${rvcolor}%10s${rst}${rcolor} %-${aliasWidth}s${rst}\n" "${Lflags[$cnt]}" "${LcertValid[$cnt]}" "${LcertName[$cnt]:0:$aliasWidth}" "${Rflags[$cnt]}" "${RcertValid[$cnt]}" "${RcertName[$cnt]:0:$aliasWidth}"
     else
       [ $cnt -eq $LENTRY ] && lcolor="${blueb}" || lcolor=""
+      if [ "${LcertDays[$cnt]}" -lt 20 ]; then
+        lvcolor="${lcolor}${red}"
+      elif [ "${LcertDays[$cnt]}" -lt 60 ]; then
+        lvcolor="${lcolor}${yellow}"
+      else
+        lvcolor="${lcolor}"
+      fi
       if [ -n "$SHOW_SERIAL" ]; then
-        printf " ${lcolor}%10s %-39s %s${rst}\n" "${LcertValid[$cnt]}" ${LcertSerial[$cnt]} "${LcertName[$cnt]}"
+        printf " ${lvcolor}%10s${rst}${lcolor} %-39s %s${rst}\n" "${LcertValid[$cnt]}" ${LcertSerial[$cnt]} "${LcertName[$cnt]}"
       else
         localWidth=$(( $(tput cols) - 13 ))
-        printf " ${lcolor}%10s %-${aliasWidth}s${rst}\n" "${LcertValid[$cnt]}" "${LcertName[$cnt]:0:$localWidth}"
+        printf " ${lvcolor}%10s${rst}${lcolor} %-${aliasWidth}s${rst}\n" "${LcertValid[$cnt]}" "${LcertName[$cnt]:0:$localWidth}"
       fi
     fi
     cnt+=1
@@ -508,7 +537,7 @@ while true; do
   if [ -n "$RFILE" ]; then
     echo "${NL} F3:${green}I${rst}nfo F5:${green}C${rst}opy F6:${green}R${rst}ename F8:${red}D${rst}elete c${green}O${rst}mpare ${green}E${rst}xport i${green}M${rst}port  F10:${red}Q${rst}uit"
   else
-    echo "${NL} F3:${green}I${rst}nfo F6:${green}R${rst}ename F8:${red}D${rst}elete ${green}E${rst}xport i${green}M${rst}port F10:${red}Q${rst}uit"
+    echo "${NL} F3:${green}I${rst}nfo F6:${green}R${rst}ename F8:${red}D${rst}elete ${green}E${rst}xport i${green}M${rst}port ${green}S${rst}erial F10:${red}Q${rst}uit"
   fi
 
   # check for pressed keys. Special keys could take up to 4 characters
@@ -586,6 +615,9 @@ while true; do
           else
             rename_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS"
           fi;clear;;
+    s|S)  [ -n "$RFILE" ] && continue
+          [ -n "$SHOW_SERIAL" ] && SHOW_SERIAL="" || SHOW_SERIAL="Y"
+          clear;;
    '	' ) [ "$TAB" == "L" ] && switch_tab R || switch_tab L;;
    m|M)  import_from_www;clear;;
     *)    clear;;
