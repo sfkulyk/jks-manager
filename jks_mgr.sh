@@ -146,7 +146,7 @@ delete_cert() {
     eval unset ${TAB}certValid[$cnt]
     eval unset ${TAB}certDays[$cnt]
     eval unset ${TAB}flags[$cnt]
-    [ compareFlag -eq 1    ] && compare_certs
+    [ compareFlag -eq 1 ] && compare_certs
     delay 2 "Certificate ${blue}$1${rst} succesfully removed from ${blue}$2${rst}"
 }
 
@@ -503,6 +503,22 @@ compare_certs() {
     compareFlag=1
 }
 
+clean_compare() {
+    typeset -i lcnt=1 rcnt=1
+
+    # clear flags
+    while [ $lcnt -le $LcertMax ]; do
+        rcnt=1
+        while [ $rcnt -le $RcertMax ]; do
+            Lflags[$lcnt]=""
+            Rflags[$rcnt]=""
+            rcnt=$(($rcnt+1))
+        done
+        lcnt=$(($lcnt+1))
+    done
+    compareFlag=0
+}
+
 # Parsing arguments
 if [ -n "$1" -a "$1" != "--help" ]; then
     LFILE="$1"
@@ -596,7 +612,7 @@ while true; do
         '[C')
             switch_tab R;;
         o|O)
-            compare_certs
+            [ compareFlag -eq 0 ] && compare_certs || clean_compare
             clear;;
         e|E)
             if [ $TAB == "L" ]; then
