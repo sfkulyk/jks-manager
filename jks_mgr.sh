@@ -3,7 +3,7 @@
 # Java keystore bash manager
 #
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.51
+# Version 1.52
 # * List of certificates in JKS
 # * Export to JKS, PKCS12, CRT
 # * Delete certificate
