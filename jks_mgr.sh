@@ -25,6 +25,10 @@
 # If you change default password, don't forget to clear it before sharing your file outside
 default_store_pwd="changeit"
 
+# highlight certificate with expiration date less then x days
+WARNING_DAYS=60
+CRITICAL_DAYS=20
+
 # Init arrays and other variables
 typeset -A LcertName LcertSerial LcertValid LcertDays Lflags
 typeset -i LcertMax=0 LENTRY=1
@@ -38,8 +42,6 @@ aliasWidth=12   # default alias width for dual mode
 compareFlag=0
 SHOW_SERIAL=""  # by default is off. Only for single-panel mode
 
-NL="
-"               # new line
 # colors
 red=$(tput bold;tput setaf 1)
 redb=$(tput bold;tput setab 6;tput setaf 1)
@@ -51,23 +53,25 @@ yellowb=$(tput bold;tput setab 6;tput setaf 3)
 rst=$(tput sgr0)
 
 help_function() {
-    echo "    ${blue}Bash java keystore manager${rst}"
-    echo "    (C) Sergii Kulyk aka Saboteur"
-    echo "${NL} Usage:"
-    echo "    ${blue}jks_mgr.sh store.jks [store2.jks]${rst}"
-    echo "${NL} Requirements:"
-    echo "    keytool from jdk should be available in PATH, standard GNU tools"
-    echo "${NL} Features:"
-    echo "    View list of certificates in storage"
-    echo "    Available commands: view details, rename, delete, export to JKS, PKCS12, CER formats"
-    echo "    If two stores provided, you can view them in two-panel mode"
-    echo "    Also in two-panel mode additional commands available: copy and compare${NL}"
+    printf " ${blue}Keystore manager\n"
+    printf " ${green}(C) Sergii Kulyk aka Saboteur${rst}\n"
+    printf " ${blue}Requirements:${rst}\n"
+    printf "   sed, grep and keytool from jdk should be available in PATH\n"
+    printf " ${blue}Features:${rst}\n"
+    printf "   Browse certificates in keystores supported by keytool (JKS, PKCS12)\n"
+    printf "   In case of providing two stores, two-panel mode will be enabled.\n"
+    printf "   Available commands:\n"
+    printf "     View details, Rename, Delete, Export to JKS, PKCS12, CER formats,\n"
+    printf "     Import (directly from web-site)\n"
+    printf "     in two-panel mode also available: Copy, Compare (by cert serial ID)\n"
+    printf " ${blue}Usage:${rst}\n"
+    printf "   jks_mgr.sh <store> [<store2>]\n"
 }
 
 # wait for x seconds or continue on pressing enter
 # $1 seconds, $2 text
 delay() {
-    echo "$2"
+    printf "$2"
     read -N1 -t $1
 }
 
@@ -78,7 +82,7 @@ adjust_height() {
     pageHeight=$localHeight
         if [ $pageHeight -lt 0 ]; then
             if [ -a -n "$1" ]; then
-                echo "Screen height is too smal. Need at least 7 rows"
+                printf "Screen height is too smal. Need at least 7 rows\n"
                 exit 1
             else
                 pageHeight=10 # default height
@@ -96,17 +100,17 @@ adjust_height() {
 
 # $1: cert alias, $2: store file, $3: store pass
 delete_cert() {
-    echo -n "${NL}Press ${red}y${rst}/${red}Y${rst} to delete [${green}$1${rst}] from ${green}$2${rst}: "
+    printf "\nPress ${red}y${rst}/${red}Y${rst} to delete [${green}$1${rst}] from ${green}$2${rst}: "
     read -N1
     if [ "$REPLY" == y -o "$REPLY" == Y ]; then
-        echo "${NL}${red}Removing certificate [$1]${rst}"
+        printf "\n${red}Removing certificate [$1]${rst}\n"
         keytool -delete -alias "$1" -keystore "$2" -storepass "$3"
         if [ $? -ne 0 ]; then
             delay 5 "${red}Error deleting $1 from $2${rst}"
             return
         fi
     else
-        delay 5 "${NL}${red}Cancelled.${rst}"
+        delay 5 "\n${red}Cancelled.${rst}"
         return
     fi
 
@@ -154,8 +158,24 @@ delete_cert() {
 # $1 - store file, $2 - store pass, $3 - tab (L or R)
 init_certs() {
     [ -n "$3" ] && localTAB=$3 || localTAB=L
-    echo "Opening ${green}$1${rst} ... as ${localTAB}"
+    printf "Opening ${green}$1${rst} ... as ${localTAB}\n"
     typeset -i cnt=1
+
+    if [ ! -s $1 ]; then
+      printf "File ${blue}$1${rst} doesn't exists. Do you want to create new empty store (${green}y${rst}/${red}n${rst})?: "
+      read -N1
+      if [ "$REPLY" != y -a "$REPLY" != Y ]; then
+        printf "${red}Aborted.${rst}\n"
+        exit 0
+      fi
+      if [ "$localTAB" == L ]; then
+        LFileEmpty=1
+      else
+        RFileEmpty=1
+      fi
+      return 0
+    fi
+
     while read; do
         if [ "$REPLY" == "--" ]; then
              continue
@@ -189,7 +209,7 @@ print_certs() {
 
     if [ -n "$RFILE" ]; then
         [ "${RcertMax}" -gt "${LcertMax}" ] && commonMax=${RcertMax}
-        printf " store: ${blue}%-${aliasWidth}s${rst}         | store: ${blue}%-${aliasWidth}s${rst}\n" "$LFILE" "$RFILE"
+        printf " store: ${blue}%-${aliasWidth}s${rst}     | store: ${blue}%-${aliasWidth}s${rst}\n" "$LFILE" "$RFILE"
         printf " %-10s %-${aliasWidth}s | %-10s %-${aliasWidth}s\n" "Valid to" "Alias" "Valid to" "Alias"
     else
         printf " store: %s\n" "$LFILE"
@@ -218,16 +238,16 @@ print_certs() {
                 [ $TAB == "R" ] && rcolor=${blueb} || rcolor=${blue}
             fi
 
-            if [ "${LcertDays[$cnt]}" -lt 20 ]; then
+            if [ "${LcertDays[$cnt]}" -lt $CRITICAL_DAYS ]; then
                 lvcolor="${lcolor}${red}"
-            elif [ "${LcertDays[$cnt]}" -lt 60 ]; then
+            elif [ "${LcertDays[$cnt]}" -lt $WARNING_DAYS ]; then
                 lvcolor="${lcolor}${yellow}"
             else
                 lvcolor="${lcolor}"
             fi
-            if [ "${RcertDays[$cnt]}" -lt 20 ]; then
+            if [ "${RcertDays[$cnt]}" -lt $CRITICAL_DAYS ]; then
                 rvcolor="${rcolor}${red}"
-            elif [ "${RcertDays[$cnt]}" -lt 60 ]; then
+            elif [ "${RcertDays[$cnt]}" -lt $WARNING_DAYS ]; then
                 rvcolor="${rcolor}${yellow}"
             else
                 rvcolor="${rcolor}"
@@ -256,49 +276,49 @@ print_certs() {
 
 # $1 Alias $2 store $3 store pass
 export_cert() {
-    ALIASNAME=$(echo "$1"|tr -d '[]()#*?\\/'|tr " " "_")
+    ALIASNAME=$(printf "$1"|tr -d '[]()#*?\\/'|tr " " "_")
     while true; do
-        echo -n "${NL}1. ${green}J${rst}KS${NL}2. ${green}P${rst}KCS12${NL}3. ${green}c${rst}rt${NL}4. ${red}Q${rst}uit${NL}${NL}Choose export format for certificate: ${green}$1${rst} from ${green}$2${rst}: "
+        printf "\n1. ${green}J${rst}KS\n2. ${green}P${rst}KCS12\n3. ${green}c${rst}rt\n4. ${red}Q${rst}uit\n\nChoose export format for certificate: ${green}$1${rst} from ${green}$2${rst}: "
         read -rsN1
         case $REPLY in
             j|J|1) FILENAME="${ALIASNAME}.jks"
-                         echo -n "${NL}Provide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
+                         printf "\nProvide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
                          read
                          [ -n "$REPLY" ] && FILENAME="$REPLY"
                          DESTPASS="${default_store_pwd}"
-                         echo -n "${NL}Provide password for $FILENAME (press ENTER to use: ${green}${DESTPASS}${rst}) :"
+                         printf "\nProvide password for $FILENAME (press ENTER to use: ${green}${DESTPASS}${rst}) :"
                          read
                          [ -n "$REPLY" ] && DESTPASS="$REPLY"
                          keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$DESTPASS" -deststoretype jks
                          if [ $? -eq 0 ]; then
-                             delay 2 echo "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}"
+                             delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
                          else
-                             delay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}"
+                             delay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
                          fi
                          break;;
             p|P|2) FILENAME="${ALIASNAME}.pkcs12"
-                         echo -n "${NL}Provide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
+                         printf "\nProvide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
                          read
                          [ -n "$REPLY" ] && FILENAME="$REPLY"
                          DESTPASS="${default_store_pwd}"
-                         echo -n "${NL}Provide password for $FILENAME (press ENTER to use: ${green}${DESTPASS}${rst}) :"
+                         printf "\nProvide password for $FILENAME (press ENTER to use: ${green}${DESTPASS}${rst}) :"
                          read
                          [ -n "$REPLY" ] && DESTPASS="$REPLY"
                          keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$DESTPASS" -deststoretype pkcs12
                          if [ $? -eq 0 ]; then
-                             delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}"
+                             delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
                          else
-                             delay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}"
+                             delay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
                          fi
                          break;;
             c|C|3) FILENAME="${ALIASNAME}.cer"
-                         echo -n "${NL}Provide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
+                         printf "\nProvide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
                          read
                          keytool -exportcert -v -alias "$1" -keystore "$2" -storepass "$3" -rfc -file "${FILENAME}"
                          if [ $? -eq 0 ]; then
-                             delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}"
+                             delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
                          else
-                             delay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}"
+                             delay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
                          fi
                          break;;
             q|Q|4) break;;
@@ -319,25 +339,25 @@ print_details() {
         localValid=${RcertValid[$RENTRY]}
         localDays=${RcertDays[$RENTRY]}
     fi
-    echo "${NL}Details for certificate [${green}${localAlias}${rst}]:"
+    printf "\nDetails for certificate [${green}${localAlias}${rst}]:\n"
     keytool -list -v -alias "$localAlias" -keystore "$2" -storepass "$3" 2>/dev/null| sed -n '/Alias:/p;/Creation date:/p;/Owner:/p;/Issuer:/p;/Serial number:/p;/Valid from:/p;/DNSName:/p'
-    echo "${NL}Press any key"
+    printf "\nPress any key"
     read -rsn1
 }
 
 # $1 certificate alias $2 - source store $3 source storepass $4 dest store $5 dest store pass
 copy_cert() {
-    echo -n "${NL}Press ${red}y${rst}/${red}Y${rst} to copy [${green}$1${rst}] from ${green}$2${rst} to ${green}$4${rst}: "
+    printf "\nPress ${red}y${rst}/${red}Y${rst} to copy [${green}$1${rst}] from ${green}$2${rst} to ${green}$4${rst}: "
     read -N1
     if [ "$REPLY" == y -o "$REPLY" == Y ]; then
-        echo "${NL}${blue}Copying certificate [$1]${rst}"
+        printf "\n${blue}Copying certificate [$1]${rst}\n"
         keytool -importkeystore -srckeystore "$2" -destkeystore "$4" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$5"
         if [ $? -ne 0 ]; then
-            delay 5 echo "${red}Error copying $1 from $2${rst}"
+            delay 5 "${red}Error copying $1 from $2${rst}\n"
             return
         fi
     else
-        delay 5 "${NL}${red}Cancelled.${rst}"
+        delay 5 "\n${red}Cancelled.${rst}\n"
         return
     fi
 
@@ -372,25 +392,25 @@ copy_cert() {
         LcertDays[${counter}]=${RcertDays[${RENTRY}]}
     fi
     [ compareFlag -eq 1 ] && compare_certs
-    delay 2 "Certificate ${blue}$1${rst} succesfully copied from ${blue}$2${rst} to ${blue}$4${rst}"
+    delay 2 "Certificate ${blue}$1${rst} succesfully copied from ${blue}$2${rst} to ${blue}$4${rst}\n"
 }
 
 # import certificate from web-site
 import_from_www() {
-    echo -n "${NL}Please enter URL without https - [${green}site${rst}] or [${green}site:port${rst}] (or empty string to cancel): "
+    printf "\nPlease enter URL without https - [${green}site${rst}] or [${green}site:port${rst}] (or empty string to cancel): "
     read URL
     if [ -n "$URL" ]; then
-        SITE=$(echo "$URL"|cut -d: -f1)
-        echo "$URL"|grep :>/dev/null
+        SITE=$(printf "$URL"|cut -d: -f1)
+        printf "$URL"|grep :>/dev/null
         if [ $? -eq 0 ]; then
-            PORT=$(echo "$URL"|cut -d: -f2)
+            PORT=$(printf "$URL"|cut -d: -f2)
         else
             PORT="443"
         fi
-        echo "${NL}${blue}Getting certificate from [$SITE:$PORT]${rst}"
+        printf "\n${blue}Getting certificate from [$SITE:$PORT]${rst}\n"
         openssl s_client -showcerts -connect "$SITE:$PORT" </dev/null 2>/dev/null|openssl x509 -outform PEM >temp.pem
         if [ $? -ne 0 ]; then
-            delay 5 echo "${red}Unable to download certificate from $SITE:$PORT${rst}"
+            delay 5 "${red}Unable to download certificate from $SITE:$PORT${rst}\n"
             rm temp.pem
             return
         fi
@@ -403,11 +423,11 @@ import_from_www() {
         fi
         keytool -import -file temp.pem -keystore "$storefile" -storepass "$storepass" -noprompt -alias "$SITE"
         if [ $? -ne 0 ]; then
-            delay 5 echo "${red}Can't add certificate to keystore${rst}"
+            delay 5 "${red}Can't add certificate to keystore${rst}\n"
             rm temp.pem
             return
         fi
-        delay 2 echo "${blue}Certificate $SITE was imported to $storefile${rst}"
+        delay 2 "${blue}Certificate $SITE was imported to $storefile${rst}\n"
         if [ "$TAB" == "L" ]; then
             init_certs "$LFILE" "$LSTOREPASS" "L"
         else
@@ -415,22 +435,22 @@ import_from_www() {
         fi
         [ compareFlag -eq 1 ] && compare_certs
     else
-        delay 5 "${NL}${red}Cancelled.${rst}"
+        delay 5 "\n${red}Cancelled.${rst}"
     fi
 }
 
 # $1 source alias, $2 store file $3 store pass
 rename_cert() {
-    echo -n "${NL}Provide new name for ${blue}$1${rst}: "
+    printf "\nProvide new name for ${blue}$1${rst}: "
     read newAlias
     if [ -z "$newAlias" ]; then
-        delay 5 "${NL}${red}Cancelled.${rst}"
+        delay 5 "\n${red}Cancelled.${rst}"
         return
     fi
-    echo -n "${NL}Press ${red}y${rst}/${red}Y${rst} to rename ${green}$1${rst} from ${green}$2${rst} to ${green}${newAlias}${rst}: "
+    printf "\nPress ${red}y${rst}/${red}Y${rst} to rename ${green}$1${rst} from ${green}$2${rst} to ${green}${newAlias}${rst}: "
     read -N1
     if [ "$REPLY" == y -o "$REPLY" == Y ]; then
-        echo "${NL}${blue}Renaming certificate [$1]${rst}"
+        printf "\n${blue}Renaming certificate [$1]${rst}\n"
         keytool -importkeystore -srckeystore "$2" -destkeystore "tmp.jks" -srcalias "$1" -destalias "$newAlias" -srcstorepass "$3" -deststorepass "$3"
         if [ $? -ne 0 ]; then
             delay 5 "${red}Error renaming certificate $1 from $2${rst}"
@@ -447,7 +467,7 @@ rename_cert() {
             return
         fi
     else
-        delay 5 "${NL}${red}Cancelled.${rst}"
+        delay 5 "\n${red}Cancelled.${rst}"
         return
     fi
     rm tmp.jks
@@ -522,7 +542,7 @@ clean_compare() {
 # Parsing arguments
 if [ -n "$1" -a "$1" != "--help" ]; then
     LFILE="$1"
-    echo -n "Provide password for ${green}$LFILE${rst}(press ENTER to use default ${green}${default_store_pwd}${rst} ): "
+    printf "Provide password for ${green}$LFILE${rst}(press ENTER to use default ${green}${default_store_pwd}${rst} ): "
     read
     [ -z "$REPLY" ] && LSTOREPASS="$default_store_pwd" || LSTOREPASS="$REPLY"
 else
@@ -533,7 +553,7 @@ fi
 # if provided second argument - switch to dual-panel mode
 if [ -n "$2" ]; then
     RFILE="$2"
-    echo -n "Provide password for ${green}$RFILE${rst}(press ENTER to use default ${green}${default_store_pwd}${rst} ): "
+    printf "Provide password for ${green}$RFILE${rst}(press ENTER to use default ${green}${default_store_pwd}${rst} ): "
     read
     [ -z "$REPLY" ] && RSTOREPASS="$default_store_pwd" || RSTOREPASS="$REPLY"
 fi
@@ -553,9 +573,9 @@ while true; do
     print_certs
     
     if [ -n "$RFILE" ]; then
-        echo "${NL} F3:${green}I${rst}nfo F5:${green}C${rst}opy F6:${green}R${rst}ename F8:${red}D${rst}elete c${green}O${rst}mpare ${green}E${rst}xport i${green}M${rst}port    F10:${red}Q${rst}uit"
+        printf "\n F3:${green}I${rst}nfo F5:${green}C${rst}opy F6:${green}R${rst}ename F8:${red}D${rst}elete c${green}O${rst}mpare ${green}E${rst}xport i${green}M${rst}port F10:${red}Q${rst}uit\n"
     else
-        echo "${NL} F3:${green}I${rst}nfo F6:${green}R${rst}ename F8:${red}D${rst}elete ${green}E${rst}xport i${green}M${rst}port ${green}S${rst}erial F10:${red}Q${rst}uit"
+        printf "\n F3:${green}I${rst}nfo F6:${green}R${rst}ename F8:${red}D${rst}elete ${green}E${rst}xport i${green}M${rst}port ${green}S${rst}erial F10:${red}Q${rst}uit\n"
     fi
 
     # Special keypress could take up to 4 characters
@@ -571,45 +591,53 @@ while true; do
     tput el1 # clear line from escaped chars
 
     case "$keypress" in
-        q|Q|'[21~')
-            echo "${NL}${green}Good bye${rst}"; exit 0;;
-        '[A')
+        q|Q|'[21~')	# q/Q/F10
+            printf "\n${green}Good bye${rst}\n"; exit 0;;
+        '[A')		# Up arrow
             if [ $TAB == "L" ]; then
-                LENTRY=$(( $LENTRY-1 )); [ $LENTRY -lt 1 ] && LENTRY=1
-                if [ $POSITION -gt $LENTRY ]; then
-                    POSITION=$(($POSITION-1))
-                    [ $POSITION -le 1 ] && POSITION=1
-                    clear
+                if [ $LFileEmpty!="1" ]; then
+                    LENTRY=$(( $LENTRY-1 )); [ $LENTRY -lt 1 ] && LENTRY=1
+                    if [ $POSITION -gt $LENTRY ]; then
+                        POSITION=$(($POSITION-1))
+                        [ $POSITION -le 1 ] && POSITION=1
+                        clear
+                    fi
                 fi
             else
-                RENTRY=$(( $RENTRY-1 )); [ $RENTRY -lt 1 ] && RENTRY=1
-                if [[ $POSITION -gt $RENTRY ]]; then
-                    POSITION=$(($POSITION-1))
-                    [ $POSITION -le 1 ] && POSITION=1
-                    clear
+                if [ $RFileEmpty!="1" ]; then
+                    RENTRY=$(( $RENTRY-1 )); [ $RENTRY -lt 1 ] && RENTRY=1
+                    if [[ $POSITION -gt $RENTRY ]]; then
+                        POSITION=$(($POSITION-1))
+                        [ $POSITION -le 1 ] && POSITION=1
+                        clear
+                    fi
                 fi
             fi;;
-        '[B')
+        '[B')		# Down arrow
             if [ $TAB == 'L' ]; then
-                LENTRY=$(( $LENTRY+1 ))
-                [ $LENTRY -gt $LcertMax ] && LENTRY=$LcertMax
-                if [[ $(($POSITION+$pageHeight)) -lt $LENTRY ]]; then
-                    POSITION=$(($POSITION+1))
-                    [ $POSITION -gt $LcertMax ] && POSITION=$LcertMax
-                    clear
+                if [ $LFileEmpty!="1" ]; then
+                    LENTRY=$(( $LENTRY+1 ))
+                    [ $LENTRY -gt $LcertMax ] && LENTRY=$LcertMax
+                    if [[ $(($POSITION+$pageHeight)) -lt $LENTRY ]]; then
+                        POSITION=$(($POSITION+1))
+                        [ $POSITION -gt $LcertMax ] && POSITION=$LcertMax
+                        clear
+                    fi
                 fi
             else
-                RENTRY=$(( $RENTRY+1 ))
-                [ $RENTRY -gt $RcertMax ] && RENTRY=$RcertMax
-                if [[ $(($POSITION+$pageHeight)) -lt $RENTRY ]]; then
-                    POSITION=$(( $POSITION + 1))
-                    [ $POSITION -gt $RcertMax ] && POSITION=$RcertMax
-                    clear
+                if [ $LFileEmpty!="1" ]; then
+                    RENTRY=$(( $RENTRY+1 ))
+                    [ $RENTRY -gt $RcertMax ] && RENTRY=$RcertMax
+                    if [[ $(($POSITION+$pageHeight)) -lt $RENTRY ]]; then
+                        POSITION=$(( $POSITION + 1))
+                        [ $POSITION -gt $RcertMax ] && POSITION=$RcertMax
+                        clear
+                    fi
                 fi
             fi;;
-        '[D')
+        '[D')		# Left arrow
             switch_tab L;;
-        '[C')
+        '[C')		# Right arrow
             switch_tab R;;
         o|O)
             [ compareFlag -eq 0 ] && compare_certs || clean_compare
@@ -621,7 +649,7 @@ while true; do
                 export_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS"
             fi
             clear;;
-        c|C|'[15~')
+        c|C|'[15~')	# c/C/F5
             [ -z "$RFILE" ] && continue
             if [ $TAB == "L" ]; then
                 copy_cert "${LcertName[$LENTRY]}" "$LFILE" "$LSTOREPASS" "$RFILE" "$RSTOREPASS"
@@ -629,21 +657,21 @@ while true; do
                 copy_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS" "$LFILE" "$LSTOREPASS"
             fi
             clear;;
-        d|D|'[19~')
+        d|D|'[19~')	# d/D/F8
             if [ $TAB == "L" ]; then
                 delete_cert "${LcertName[$LENTRY]}" "${LFILE}" "${LSTOREPASS}"
             else
                 delete_cert "${RcertName[$RENTRY]}" "${RFILE}" "${RSTOREPASS}"
             fi
             clear;;
-        i|I|'[13~'|'OR')
+        i|I|'[13~')	# i/I/F3
             if [ ${TAB} == "L" ]; then
                 print_details "${LcertName[$LENTRY]}" "${LFILE}" "${LSTOREPASS}"
             else
                 print_details "${RcertName[$RENTRY]}" "${RFILE}" "${RSTOREPASS}"
             fi
             clear;;
-        r|R|'[17~')
+        r|R|'[17~')	# r/R/F6
             if [ $TAB == "L" ]; then
                 rename_cert "${LcertName[$LENTRY]}" "$LFILE" "$LSTOREPASS"
             else
@@ -654,7 +682,7 @@ while true; do
             [ -n "$RFILE" ] && continue
             [ -n "$SHOW_SERIAL" ] && SHOW_SERIAL="" || SHOW_SERIAL="Y"
             clear;;
-        '	' )
+        $'\t')          # tab
             [ "$TAB" == "L" ] && switch_tab R || switch_tab L;;
         m|M)
             import_from_www
