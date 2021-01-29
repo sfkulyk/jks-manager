@@ -3,7 +3,7 @@
 # Java keystore bash manager
 #
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.52
+# Version 1.51
 # * List of certificates in JKS
 # * Export to JKS, PKCS12, CRT
 # * Delete certificate
@@ -212,7 +212,7 @@ print_certs() {
         printf " store: ${blue}%-${aliasWidth}s${rst}     | store: ${blue}%-${aliasWidth}s${rst}\n" "$LFILE" "$RFILE"
         printf " %-10s %-${aliasWidth}s | %-10s %-${aliasWidth}s\n" "Valid to" "Alias" "Valid to" "Alias"
     else
-        printf " store: %s\n" "$LFILE"
+        printf " store: ${blue}%s${rst}\n" "$LFILE"
         if [ -n "$SHOW_SERIAL" ]; then
             printf " %-10s %-39s %s\n" "Valid to" "Serial No" "Alias"
         else
