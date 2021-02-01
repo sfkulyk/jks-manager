@@ -3,7 +3,7 @@
 # Java keystore bash manager
 #
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.51
+# Version 1.52
 # * List of certificates in JKS
 # * Export to JKS, PKCS12, CRT
 # * Delete certificate
@@ -19,7 +19,8 @@
 # * Auto screen width, Certificate alias can be shortened to fit the screen
 # * Add import certificate from web site
 # * Add colors for certificate expiration (yellow for <60 days, red for <20 days)
-# * add show serial feature to single-panel mode
+# * Add show serial feature to single-panel mode
+# * Add export to PEM file
 #
 
 # If you change default password, don't forget to clear it before sharing your file outside
@@ -278,7 +279,7 @@ print_certs() {
 export_cert() {
     ALIASNAME=$(printf "$1"|tr -d '[]()#*?\\/'|tr " " "_")
     while true; do
-        printf "\n1. ${green}J${rst}KS\n2. ${green}P${rst}KCS12\n3. ${green}c${rst}rt\n4. ${red}Q${rst}uit\n\nChoose export format for certificate: ${green}$1${rst} from ${green}$2${rst}: "
+        printf "\n1. ${green}J${rst}KS\n2. ${green}P${rst}KCS12\n3. ${green}c${rst}rt\n4. P${green}E${rst}M\n5. ${red}Q${rst}uit\n\nChoose export format for certificate: ${green}$1${rst} from ${green}$2${rst}: "
         read -rsN1
         case $REPLY in
             j|J|1) FILENAME="${ALIASNAME}.jks"
@@ -321,7 +322,24 @@ export_cert() {
                              delay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
                          fi
                          break;;
-            q|Q|4) break;;
+            e|E|4) FILENAME="${ALIASNAME}.pem"
+                         printf "\nProvide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
+                         read
+                         [ -f pck12.tmp ] && rm -rf pck12.tmp
+                         keytool -importkeystore -srckeystore "$2" -destkeystore pck12.tmp -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$3" -deststoretype pkcs12
+                         if [ $? -eq 0 ]; then
+                             openssl pkcs12 -in pck12.tmp -passin "pass:$3" -out "$FILENAME"
+                             if [ $? -eq 0 ]; then
+                                 delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
+                             else
+                                 delay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
+                             fi
+                         else
+                             delay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
+                         fi
+                         [ -f pck12.tmp ] && rm -rf pck12.tmp
+                         break;;
+            q|Q|5) break;;
         esac
     done
 }
