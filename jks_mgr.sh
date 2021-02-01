@@ -682,7 +682,7 @@ while true; do
                 delete_cert "${RcertName[$RENTRY]}" "${RFILE}" "${RSTOREPASS}"
             fi
             clear;;
-        i|I|'[13~')	# i/I/F3
+        i|I|'[13~'|OR)	# i/I/F3 ( ^[OR - F3 in tectia )
             if [ ${TAB} == "L" ]; then
                 print_details "${LcertName[$LENTRY]}" "${LFILE}" "${LSTOREPASS}"
             else
