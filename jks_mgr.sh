@@ -1,9 +1,11 @@
 #!/bin/ksh
 #
 # Java keystore bash manager
+# Update:
+# cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
 #
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.52
+# Version 1.53
 # * List of certificates in JKS
 # * Export to JKS, PKCS12, CRT
 # * Delete certificate
@@ -76,6 +78,12 @@ delay() {
     read -N1 -t $1
 }
 
+debug() {
+    printf "Executing command: ${green}$2${rst}"
+    printf "press any key to continue"
+    read -N1
+}
+
 # automatically adjust windows height if it is less then 22
 adjust_height() {
     localHeight=$(( $(tput lines)-7 )) # 7 lines for header and footer
@@ -105,6 +113,7 @@ delete_cert() {
     read -N1
     if [ "$REPLY" == y -o "$REPLY" == Y ]; then
         printf "\n${red}Removing certificate [$1]${rst}\n"
+        [ -n $DEBUG ] && debug "keytool -delete -alias \"$1\" -keystore \"$2\" -storepass \"$3\"
         keytool -delete -alias "$1" -keystore "$2" -storepass "$3"
         if [ $? -ne 0 ]; then
             delay 5 "${red}Error deleting $1 from $2${rst}"
@@ -290,6 +299,7 @@ export_cert() {
                          printf "\nProvide password for $FILENAME (press ENTER to use: ${green}${DESTPASS}${rst}) :"
                          read
                          [ -n "$REPLY" ] && DESTPASS="$REPLY"
+                         [ -n $DEBUG ] && debug "keytool -importkeystore -srckeystore \"$2\" -destkeystore \"${FILENAME}\" -srcalias \"$1\" -destalias \"$1\" -srcstorepass \"$3\" -deststorepass \"$DESTPASS\" -deststoretype jks"
                          keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$DESTPASS" -deststoretype jks
                          if [ $? -eq 0 ]; then
                              delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
