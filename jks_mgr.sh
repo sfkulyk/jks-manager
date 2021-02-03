@@ -5,7 +5,7 @@
 # cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
 #
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.53
+# Version 1.6
 # * List of certificates in JKS
 # * Export to JKS, PKCS12, CRT
 # * Delete certificate
@@ -23,7 +23,8 @@
 # * Add colors for certificate expiration (yellow for <60 days, red for <20 days)
 # * Add show serial feature to single-panel mode
 # * Add export to PEM file
-#
+# * Autoupdater. Also added url to the file for manual update
+# * Debug feature
 
 # If you change default password, don't forget to clear it before sharing your file outside
 default_store_pwd="changeit"
@@ -43,7 +44,8 @@ POSITION=1      # Screen position
 pageHeight=10   # active menu height
 aliasWidth=12   # default alias width for dual mode
 compareFlag=0
-SHOW_SERIAL=""  # by default is off. Only for single-panel mode
+SHOW_SERIAL=""  # OFF by default. Only for single-panel mode
+DEBUG=""        # If not empty, shows keytool/openssl cmds and wait for confirm
 
 # colors
 red=$(tput bold;tput setaf 1)
@@ -79,8 +81,7 @@ delay() {
 }
 
 debug() {
-    printf "Executing command: ${green}$2${rst}"
-    printf "press any key to continue"
+    printf "Press any key to execute the following command:\n${green}$1${rst}\n"
     read -N1
 }
 
@@ -113,7 +114,7 @@ delete_cert() {
     read -N1
     if [ "$REPLY" == y -o "$REPLY" == Y ]; then
         printf "\n${red}Removing certificate [$1]${rst}\n"
-        [ -n $DEBUG ] && debug "keytool -delete -alias \"$1\" -keystore \"$2\" -storepass \"$3\"
+        [ -n "$DEBUG" ] && debug "keytool -delete -alias \"$1\" -keystore \"$2\" -storepass \"$3\""
         keytool -delete -alias "$1" -keystore "$2" -storepass "$3"
         if [ $? -ne 0 ]; then
             delay 5 "${red}Error deleting $1 from $2${rst}"
@@ -299,7 +300,7 @@ export_cert() {
                          printf "\nProvide password for $FILENAME (press ENTER to use: ${green}${DESTPASS}${rst}) :"
                          read
                          [ -n "$REPLY" ] && DESTPASS="$REPLY"
-                         [ -n $DEBUG ] && debug "keytool -importkeystore -srckeystore \"$2\" -destkeystore \"${FILENAME}\" -srcalias \"$1\" -destalias \"$1\" -srcstorepass \"$3\" -deststorepass \"$DESTPASS\" -deststoretype jks"
+                         [ -n "$DEBUG" ] && debug "keytool -importkeystore -srckeystore \"$2\" -destkeystore \"${FILENAME}\" -srcalias \"$1\" -destalias \"$1\" -srcstorepass \"$3\" -deststorepass \"$DESTPASS\" -deststoretype jks"
                          keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$DESTPASS" -deststoretype jks
                          if [ $? -eq 0 ]; then
                              delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
@@ -315,6 +316,7 @@ export_cert() {
                          printf "\nProvide password for $FILENAME (press ENTER to use: ${green}${DESTPASS}${rst}) :"
                          read
                          [ -n "$REPLY" ] && DESTPASS="$REPLY"
+                         [ -n "$DEBUG" ] && debug "keytool -importkeystore -srckeystore \"$2\" -destkeystore \"${FILENAME}\" -srcalias \"$1\" -destalias \"$1\" -srcstorepass \"$3\" -deststorepass \"$DESTPASS\" -deststoretype pkcs12"
                          keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$DESTPASS" -deststoretype pkcs12
                          if [ $? -eq 0 ]; then
                              delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
@@ -325,6 +327,7 @@ export_cert() {
             c|C|3) FILENAME="${ALIASNAME}.cer"
                          printf "\nProvide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
                          read
+                         [ -n "$DEBUG" ] && debug "keytool -exportcert -v -alias \"$1\" -keystore \"$2\" -storepass \"$3\" -rfc -file \"${FILENAME}\""
                          keytool -exportcert -v -alias "$1" -keystore "$2" -storepass "$3" -rfc -file "${FILENAME}"
                          if [ $? -eq 0 ]; then
                              delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
@@ -336,8 +339,10 @@ export_cert() {
                          printf "\nProvide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
                          read
                          [ -f pck12.tmp ] && rm -rf pck12.tmp
+                         [ -n "$DEBUG" ] && debug "keytool -importkeystore -srckeystore \"$2\" -destkeystore pck12.tmp -srcalias \"$1\" -destalias \"$1\" -srcstorepass \"$3\" -deststorepass \"$3\" -deststoretype pkcs12"
                          keytool -importkeystore -srckeystore "$2" -destkeystore pck12.tmp -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$3" -deststoretype pkcs12
                          if [ $? -eq 0 ]; then
+                             [ -n "$DEBUG" ] && debug "openssl pkcs12 -in pck12.tmp -passin \"pass:$3\" -out \"$FILENAME\""
                              openssl pkcs12 -in pck12.tmp -passin "pass:$3" -out "$FILENAME"
                              if [ $? -eq 0 ]; then
                                  delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
@@ -368,7 +373,7 @@ print_details() {
         localDays=${RcertDays[$RENTRY]}
     fi
     printf "\nDetails for certificate [${green}${localAlias}${rst}]:\n"
-    keytool -list -v -alias "$localAlias" -keystore "$2" -storepass "$3" 2>/dev/null| sed -n '/Alias:/p;/Creation date:/p;/Owner:/p;/Issuer:/p;/Serial number:/p;/Valid from:/p;/DNSName:/p'
+    keytool -list -v -alias "$localAlias" -keystore "$2" -storepass "$3" 2>/dev/null| sed -n '/Alias:/p;/Creation date:/p;/Entry type:/p;/Owner:/p;/Issuer:/p;/Serial number:/p;/Valid from:/p;/DNSName:/p'
     printf "\nPress any key"
     read -rsn1
 }
@@ -379,6 +384,7 @@ copy_cert() {
     read -N1
     if [ "$REPLY" == y -o "$REPLY" == Y ]; then
         printf "\n${blue}Copying certificate [$1]${rst}\n"
+        [ -n "$DEBUG" ] && debug "keytool -importkeystore -srckeystore \"$2\" -destkeystore \"$4\" -srcalias \"$1\" -destalias \"$1\" -srcstorepass \"$3\" -deststorepass \"$5\""
         keytool -importkeystore -srckeystore "$2" -destkeystore "$4" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$5"
         if [ $? -ne 0 ]; then
             delay 5 "${red}Error copying $1 from $2${rst}\n"
@@ -436,6 +442,7 @@ import_from_www() {
             PORT="443"
         fi
         printf "\n${blue}Getting certificate from [$SITE:$PORT]${rst}\n"
+        [ -n "$DEBUG" ] && debug "openssl s_client -showcerts -connect \"$SITE:$PORT\" </dev/null 2>/dev/null|openssl x509 -outform PEM >temp.pem"
         openssl s_client -showcerts -connect "$SITE:$PORT" </dev/null 2>/dev/null|openssl x509 -outform PEM >temp.pem
         if [ $? -ne 0 ]; then
             delay 5 "${red}Unable to download certificate from $SITE:$PORT${rst}\n"
@@ -449,6 +456,7 @@ import_from_www() {
             storefile=$RFILE
             storepass=$RSTOREPASS
         fi
+        [ -n "$DEBUG" ] && debug "keytool -import -file temp.pem -keystore \"$storefile\" -storepass \"$storepass\" -noprompt -alias \"$SITE\""
         keytool -import -file temp.pem -keystore "$storefile" -storepass "$storepass" -noprompt -alias "$SITE"
         if [ $? -ne 0 ]; then
             delay 5 "${red}Can't add certificate to keystore${rst}\n"
@@ -479,16 +487,19 @@ rename_cert() {
     read -N1
     if [ "$REPLY" == y -o "$REPLY" == Y ]; then
         printf "\n${blue}Renaming certificate [$1]${rst}\n"
+        [ -n "$DEBUG" ] && debug "keytool -importkeystore -srckeystore \"$2\" -destkeystore \"tmp.jks\" -srcalias \"$1\" -destalias \"$newAlias\" -srcstorepass \"$3\" -deststorepass \"$3\""
         keytool -importkeystore -srckeystore "$2" -destkeystore "tmp.jks" -srcalias "$1" -destalias "$newAlias" -srcstorepass "$3" -deststorepass "$3"
         if [ $? -ne 0 ]; then
             delay 5 "${red}Error renaming certificate $1 from $2${rst}"
             return
         fi
+        [ -n "$DEBUG" ] && debug "keytool -importkeystore -srckeystore \"tmp.jks\" -destkeystore \"$2\" -srcalias \"$newAlias\" -destalias \"$newAlias\" -srcstorepass \"$3\" -deststorepass \"$3\""
         keytool -importkeystore -srckeystore "tmp.jks" -destkeystore "$2" -srcalias "$newAlias" -destalias "$newAlias" -srcstorepass "$3" -deststorepass "$3"
         if [ $? -ne 0 ]; then
             delay 5 "${red}Error renaming certificate $1 from $2${rst}"
             return
         fi
+        [ -n "$DEBUG" ] && debug "keytool -delete -alias \"$1\" -keystore \"$2\" -storepass \"$3\""
         keytool -delete -alias "$1" -keystore "$2" -storepass "$3"
         if [ $? -ne 0 ]; then
             delay 5 "${red}Error renaming certificate $1 from $2${rst}"
@@ -568,6 +579,25 @@ clean_compare() {
 }
 
 # Parsing arguments
+if [ -n "$1" -a "$1" == "--update" ]; then
+    CUR_VERSION="$(grep -P '^# Version \K.*' $0)"
+    printf "Updating version of jks manager"
+    printf "Current version: ${CUR_VERSION}"
+    cp $0 $0.bak
+    curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh>$0
+    if [ $? -ne 0 ]; then
+        mv $0.bak $0
+        printf "Version update failed, revert back"
+        exit 1
+    fi
+    NEW_VERSION="$(grep -P '^# Version \K.*' $0)"
+    if [ "$CUR_VERSION" == "$NEW_VERSION" ]; then
+        printf "No new updates"
+    else
+      printf "Successfully updated to version ${NEW_VERSION}"
+    fi
+fi
+
 if [ -n "$1" -a "$1" != "--help" ]; then
     LFILE="$1"
     printf "Provide password for ${green}$LFILE${rst}(press ENTER to use default ${green}${default_store_pwd}${rst} ): "
@@ -601,9 +631,9 @@ while true; do
     print_certs
     
     if [ -n "$RFILE" ]; then
-        printf "\n F3:${green}I${rst}nfo F5:${green}C${rst}opy F6:${green}R${rst}ename F8:${red}D${rst}elete c${green}O${rst}mpare ${green}E${rst}xport i${green}M${rst}port F10:${red}Q${rst}uit\n"
+        printf "\n F3:${green}I${rst}nfo F5:${green}C${rst}opy F6:${green}R${rst}ename F8:${red}D${rst}elete c${green}O${rst}mpare ${green}E${rst}xport i${green}M${rst}port F10:${red}Q${rst}uit "
     else
-        printf "\n F3:${green}I${rst}nfo F6:${green}R${rst}ename F8:${red}D${rst}elete ${green}E${rst}xport i${green}M${rst}port ${green}S${rst}erial F10:${red}Q${rst}uit\n"
+        printf "\n F3:${green}I${rst}nfo F6:${green}R${rst}ename F8:${red}D${rst}elete ${green}E${rst}xport i${green}M${rst}port ${green}S${rst}erial F10:${red}Q${rst}uit "
     fi
 
     # Special keypress could take up to 4 characters
