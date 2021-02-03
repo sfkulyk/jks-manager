@@ -5,7 +5,7 @@
 # cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
 #
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.61
+# Version 1.62
 # * List of certificates in JKS
 # * Export to JKS, PKCS12, CRT
 # * Delete certificate
@@ -70,7 +70,10 @@ help_function() {
     printf "     Import (directly from web-site)\n"
     printf "     in two-panel mode also available: Copy, Compare (by cert serial ID)\n"
     printf " ${blue}Usage:${rst}\n"
-    printf "   jks_mgr.sh <store> [<store2>]\n"
+    printf "   jks_mgr.sh <keystore> [<keystore2>]\n"
+    printf "       supported all keystore format accepted by keytool (JKS, PCKS12)\n"
+    printf "   jks_mgr.sh --update\n"
+    printf "       Automatically checks and download new version from github\n"
 }
 
 # wait for x seconds or continue on pressing enter
@@ -85,8 +88,8 @@ debug() {
     read -N1
 }
 
-# automatically adjust windows height if it is less then 22
-adjust_height() {
+# automatically adjust windows height and width if it is less then 22
+adjust_window() {
     localHeight=$(( $(tput lines)-7 )) # 7 lines for header and footer
     if [ $pageHeight -ne $localHeight ]; then
     pageHeight=$localHeight
@@ -208,6 +211,7 @@ init_certs() {
             cnt+=1
         fi
     done<<<"$(keytool -list -v -keystore $1 -storepass $2|grep -P '(Alias name:|Serial number:|Valid from:)'|grep 'Alias name:' -A 2)"
+    # second grep with '-A 2' used to get certificate itself details and skip details of other certificate chain members
 }
 
 # Main print panels procedure.
@@ -216,7 +220,7 @@ print_certs() {
     typeset -i cnt=$POSITION
     typeset -i commonMax=${LcertMax}
 
-    adjust_height
+    adjust_window
 
     if [ -n "$RFILE" ]; then
         [ "${RcertMax}" -gt "${LcertMax}" ] && commonMax=${RcertMax}
@@ -373,7 +377,7 @@ print_details() {
         localDays=${RcertDays[$RENTRY]}
     fi
     printf "\nDetails for certificate [${green}${localAlias}${rst}]:\n"
-    keytool -list -v -alias "$localAlias" -keystore "$2" -storepass "$3" 2>/dev/null| sed -n '/Alias:/p;/Creation date:/p;/Entry type:/p;/Owner:/p;/Issuer:/p;/Serial number:/p;/Valid from:/p;/DNSName:/p'
+    keytool -list -v -alias "$localAlias" -keystore "$2" -storepass "$3" 2>/dev/null| sed -n '/Alias name:/p;/Creation date:/p;/Entry type:/p;/Owner:/p;/Issuer:/p;/Serial number:/p;/Valid from:/p;/DNSName:/p'
     printf "\nPress any key"
     read -rsn1
 }
@@ -580,6 +584,7 @@ clean_compare() {
 
 # Parsing arguments
 if [ -n "$1" -a "$1" == "--update" ]; then
+    [ -n "$DEBUG" ] && debug "trying to update $0"
     CUR_VERSION="$(grep -oP '^# Version \K.*' $0)"
     printf "${green}Checking for new version of jks manager${rst}\n"
     printf "Current version: ${blue}${CUR_VERSION}${rst}\n"
