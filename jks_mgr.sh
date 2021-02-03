@@ -5,7 +5,7 @@
 # cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
 #
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.6
+# Version 1.61
 # * List of certificates in JKS
 # * Export to JKS, PKCS12, CRT
 # * Delete certificate
@@ -580,23 +580,22 @@ clean_compare() {
 
 # Parsing arguments
 if [ -n "$1" -a "$1" == "--update" ]; then
-    CUR_VERSION="$(grep -P '^# Version \K.*' $0)"
-    printf "Updating version of jks manager\n"
-    printf "Current version: ${CUR_VERSION}\n"
+    CUR_VERSION="$(grep -oP '^# Version \K.*' $0)"
+    printf "${green}Checking for new version of jks manager${rst}\n"
+    printf "Current version: ${blue}${CUR_VERSION}${rst}\n"
+    NEW_VERSION="$(curl -k -s https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh|grep -oP '^# Version \K.*')"
+    if [ "$CUR_VERSION" == "$NEW_VERSION" ]; then
+        printf "${blue}No new updates${rst}\n"
+        exit 0
+    fi
     cp $0 $0.bak
-    curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh>$0
+    curl -k -s https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh>$0
     if [ $? -ne 0 ]; then
         mv $0.bak $0
-        printf "Version update failed, revert back\n"
+        printf "${red}Version update failed, revert back${rst}\n"
         exit 1
     fi
-    NEW_VERSION="$(grep -P '^# Version \K.*' $0)"
-    if [ "$CUR_VERSION" == "$NEW_VERSION" ]; then
-        printf "No new updates\n"
-        rm $0.bak
-    else
-      printf "Successfully updated to version ${NEW_VERSION}\n"
-    fi
+    printf "${green}Successfully updated to version ${blue}${NEW_VERSION}${rst}\n"
     exit 0
 fi
 
