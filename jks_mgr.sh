@@ -581,21 +581,23 @@ clean_compare() {
 # Parsing arguments
 if [ -n "$1" -a "$1" == "--update" ]; then
     CUR_VERSION="$(grep -P '^# Version \K.*' $0)"
-    printf "Updating version of jks manager"
-    printf "Current version: ${CUR_VERSION}"
+    printf "Updating version of jks manager\n"
+    printf "Current version: ${CUR_VERSION}\n"
     cp $0 $0.bak
     curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh>$0
     if [ $? -ne 0 ]; then
         mv $0.bak $0
-        printf "Version update failed, revert back"
+        printf "Version update failed, revert back\n"
         exit 1
     fi
     NEW_VERSION="$(grep -P '^# Version \K.*' $0)"
     if [ "$CUR_VERSION" == "$NEW_VERSION" ]; then
-        printf "No new updates"
+        printf "No new updates\n"
+        rm $0.bak
     else
-      printf "Successfully updated to version ${NEW_VERSION}"
+      printf "Successfully updated to version ${NEW_VERSION}\n"
     fi
+    exit 0
 fi
 
 if [ -n "$1" -a "$1" != "--help" ]; then
