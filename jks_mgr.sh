@@ -1,48 +1,56 @@
 #!/bin/ksh
 #
 # Java keystore bash manager
+# Author: Sergii Kulyk aka Saboteur
+# Version 1.8
+#
 # Update:
 # cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
 #
-# Author: Sergii Kulyk aka Saboteur
-# Version 1.62
-# * List of certificates in JKS
-# * Export to JKS, PKCS12, CRT
+# Change history
+# * First working version - list of certificates in JKS and navigate
+# * Export certificate to JKS, PKCS12, CRT
 # * Delete certificate
 # * Rename certificate
-# * dual tab support
-# * Copy certificate
-# * Functional key support (F1, F3, F5, F6, F8, F10)
-# * page height implemented with scrolling
-# * cOmpare certificates ( by serial Number)
-# * help added
-# * auto screen height with default 15+7
-# * View certificate details, fixed F3 button
-# * Auto screen width, Certificate alias can be shortened to fit the screen
+# * Add two-panel mode
+# * Copy certificate (two-panel mode only)
+# * Implemented page heigh and scrolling
+# * cOmpare certificates (two panel mode only, primary key - Serial Number)
+# * Console help added
+# * Auto screen height adjust
+# * View certificate details
+# * Add functional key support (F1, F3, F5, F6, F8, F10)
+# * Auto screen width adjust, certificate alias name can be shortened to fit the screen
 # * Add import certificate from web site
 # * Add colors for certificate expiration (yellow for <60 days, red for <20 days)
-# * Add show serial feature to single-panel mode
+# * Add show/hide serial number column (single-mode only)
 # * Add export to PEM file
-# * Autoupdater. Also added url to the file for manual update
-# * Debug feature
+# * Add --update console option. Also added direct github url for manual update
+# * DEBUG feature. Just set variable to non-empty to see and confirm all commands
+# * Add --version console option
+# * Add --help console option to see usage help
+# * show/hide sertificate entry type column
+# * add inline help (F1)
+#
 
 # If you change default password, don't forget to clear it before sharing your file outside
 default_store_pwd="changeit"
+CUR_VERSION="$(grep -oP '^# Version \K.*' $0)"
 
 # highlight certificate with expiration date less then x days
 WARNING_DAYS=60
 CRITICAL_DAYS=20
 
 # Init arrays and other variables
-typeset -A LcertName LcertSerial LcertValid LcertDays Lflags
+typeset -A LcertName LcertSerial LcertValid LcertDays Lflags Ltype
 typeset -i LcertMax=0 LENTRY=1
-typeset -A RcertName RcertSerial RcertValid RcertDays Rflags
+typeset -A RcertName RcertSerial RcertValid RcertDays Rflags Rtype
 typeset -i RcertMax=0 RENTRY=1
 escape_char=$(printf "\u1b") # for keypress navigation
 TAB="L"         # LEFT panel is default (for single mode)
 POSITION=1      # Screen position
 pageHeight=10   # active menu height
-aliasWidth=12   # default alias width for dual mode
+aliasWidth=12   # default alias width for single mode
 compareFlag=0
 SHOW_SERIAL=""  # OFF by default. Only for single-panel mode
 DEBUG=""        # If not empty, shows keytool/openssl cmds and wait for confirm
@@ -58,22 +66,57 @@ yellowb=$(tput bold;tput setab 6;tput setaf 3)
 rst=$(tput sgr0)
 
 help_function() {
-    printf " ${blue}Keystore manager\n"
-    printf " ${green}(C) Sergii Kulyk aka Saboteur${rst}\n"
+    printf " ${blue}Keystore manager ${CUR_VERSION}\n"
+    printf "   ${green}(C) Sergii Kulyk aka Saboteur${rst}\n"
     printf " ${blue}Requirements:${rst}\n"
     printf "   sed, grep and keytool from jdk should be available in PATH\n"
     printf " ${blue}Features:${rst}\n"
-    printf "   Browse certificates in keystores supported by keytool (JKS, PKCS12)\n"
-    printf "   In case of providing two stores, two-panel mode will be enabled.\n"
-    printf "   Available commands:\n"
-    printf "     View details, Rename, Delete, Export to JKS, PKCS12, CER formats,\n"
+    printf "   Browse keystores supported by keytool (JKS, PKCS12)\n"
+    printf "   Available actions with certificates and keystores:\n"
+    printf "     View details, Rename, Delete, Export to JKS, PKCS12, CER, PEM formats,\n"
     printf "     Import (directly from web-site)\n"
     printf "     in two-panel mode also available: Copy, Compare (by cert serial ID)\n"
     printf " ${blue}Usage:${rst}\n"
-    printf "   jks_mgr.sh <keystore> [<keystore2>]\n"
-    printf "       supported all keystore format accepted by keytool (JKS, PCKS12)\n"
-    printf "   jks_mgr.sh --update\n"
-    printf "       Automatically checks and download new version from github\n"
+    printf " ${green}jks_mgr.sh <keystore>${rst}\n"
+    printf "     open jks mgr in single-panel mode\n"
+    printf " ${green}jks_mgr.sh <keystore1> <keystore2>${rst}\n"
+    printf "     open jks mgr in two-panel mode\n"
+    printf " ${green}jks_mgr.sh --update${rst}\n"
+    printf "     Automatically check and download new version from github:\n"
+    printf "     ${blue}https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh${rst}\n"
+
+    printf " ${green}jks_mgr.sh --version${rst}\n"
+    printf "     Show current version\n"
+    printf " ${green}jks_mgr.sh --help${rst}\n"
+    printf "     Show this help\n"
+}
+
+inline_help() {
+    printf "\n\n ${blue}Keystore manager ${CUR_VERSION}\n"
+    printf " ${green}(C) Sergii Kulyk aka Saboteur${rst}\n"
+    printf "\n All hotkeys supported in uppercase and lowercase\n"
+    printf " ${green}up${rst}/${green}down${rst} arrows: Navigate up/down\n"
+    printf " ${green}left${rst}/${green}right${rst} arrows, tab key: Switch panel in two-panel mode\n"
+    printf " ${green}F1${rst}/${green}H${rst}: Show this help page\n"
+    printf " ${green}F3${rst}/${green}I${rst}: Show the following certificate info:\n"
+    printf "    Alias, Creation date, Entry type, Owner, Issuer\n"
+    printf "    Serial number, Valid dates, DNSName\n"
+    printf " ${green}F5${rst}/${green}C${rst}: Copy certificate (only for two-panel mode\n"
+    printf " ${green}F6${rst}/${green}R${rst}: Rename active certificate alias\n"
+    printf " ${green}F8${rst}/${green}D${rst}: Delete active certificate\n"
+    printf " ${green}F10${rst}/${green}Q${rst}: Quit program\n"
+    printf " ${green}O${rst}: cOmpare certificates. Asterisk will indicate the certificate\n"
+    printf "     if opposite panel contain certificate with the same Serial ID\n"
+    printf " ${green}E${rst}: Export certificate to JKS, PKCS12, CRT and PEM formats\n"
+    printf " ${green}M${rst}: Import certificate from web-site.\n"
+    printf "    You will be asked for DNS and optionally port (default is 443)\n"
+    printf "    For example: google.com\n"
+    printf "                 google.com:443\n"
+    printf " ${green}T${rst}: show/hide certificate entry Type\n"
+    printf " ${green}S${rst}: show/hide Serial ID (only for single-panel mode)\n"
+    printf "\n run ${green}jks_mgr.sh --help${rst} to see usage help"
+    printf "\n Press any key to return"
+    read -N1
 }
 
 # wait for x seconds or continue on pressing enter
@@ -103,11 +146,27 @@ adjust_window() {
         fi
         clear
     fi
-    localWidth=$(( ( $(tput cols) - 25 ) / 2 - 1 )) # 25 cols for valid date, divider and spaces
-    if [ $localWidth -ne $aliasWidth ]; then
-        aliasWidth=$localWidth
-        [ $aliasWidth -lt 1 ] && aliasWidth=12
-        clear
+
+    WindowWidth="$(tput cols)"
+    if [ -n "$RFILE" ]; then # two-panel
+        used=24 # Valid to
+        [ -n "$SHOW_TYPE" ] && used=$(( $used+34 ))
+        localWidth=$(( ( $WindowWidth - $used ) / 2 - 1 )) # 25 cols for valid date, divider and spaces
+        if [ $localWidth -ne $aliasWidth ]; then
+            aliasWidth=$localWidth
+            [ $aliasWidth -lt 1 ] && aliasWidth=1
+            clear
+        fi
+    else
+        used=13 # Valid to
+        [ -n "$SHOW_SERIAL" ] && used=$(( $used+40 ))
+        [ -n "$SHOW_TYPE" ] && used=$(( $used+17 ))
+        localWidth=$(( $WindowWidth - $used ))
+        if [ $localWidth -ne $aliasWidth ]; then
+            aliasWidth=$localWidth
+            [ $aliasWidth -lt 1 ] && aliasWidth=1
+            clear
+        fi
     fi
 }
 
@@ -197,6 +256,8 @@ init_certs() {
             [ "$localTAB" == L ] && LcertName[$cnt]="${REPLY##*: }" || RcertName[$cnt]="${REPLY##*: }"
         elif expr "$REPLY" : "Serial number: ">/dev/null; then
             [ "$localTAB" == L ] && LcertSerial[$cnt]="${REPLY##*: }" || RcertSerial[$cnt]="${REPLY##*: }"
+        elif expr "$REPLY" : "Entry type: ">/dev/null; then
+            [ "$localTAB" == L ] && Ltype[$cnt]="${REPLY##*: }" || Rtype[$cnt]="${REPLY##*: }"
         else
             validunix=$(/bin/date --date="${REPLY##*until: }" "+%s")
             if [ "$localTAB" == L ]; then
@@ -210,7 +271,7 @@ init_certs() {
             fi
             cnt+=1
         fi
-    done<<<"$(keytool -list -v -keystore $1 -storepass $2|grep -P '(Alias name:|Serial number:|Valid from:)'|grep 'Alias name:' -A 2)"
+    done<<<"$(keytool -list -v -keystore $1 -storepass $2|grep -P '(Alias name:|Entry type:|Serial number:|Valid from:)'|grep 'Alias name:' -A 3)"
     # second grep with '-A 2' used to get certificate itself details and skip details of other certificate chain members
 }
 
@@ -222,17 +283,26 @@ print_certs() {
 
     adjust_window
 
-    if [ -n "$RFILE" ]; then
+    if [ -n "$RFILE" ]; then # two-panel
+        
         [ "${RcertMax}" -gt "${LcertMax}" ] && commonMax=${RcertMax}
-        printf " store: ${blue}%-${aliasWidth}s${rst}     | store: ${blue}%-${aliasWidth}s${rst}\n" "$LFILE" "$RFILE"
-        printf " %-10s %-${aliasWidth}s | %-10s %-${aliasWidth}s\n" "Valid to" "Alias" "Valid to" "Alias"
-    else
+        headerWidth=$(( $aliasWidth + 5 ))
+        [ -n "$SHOW_TYPE" ] && headerWidth=$(( $headerWidth + 17 ))
+        printf " store: ${blue}%-$(( $headerWidth ))s${rst}" "$LFILE"
+        printf "| store: ${blue}%-$(( $headerWidth -1 ))s${rst}\n" "$RFILE"
+
+        printf " %-10s" "Valid to"
+        [ -n "$SHOW_TYPE" ] && printf " %-16s" "Storetype"
+        printf " %-${aliasWidth}s |" "Alias"
+        printf " %-10s" "Valid to"
+        [ -n "$SHOW_TYPE" ] && printf " %-16s" "Storetype"
+        printf " %-${aliasWidth}s\n" "Alias"
+    else # single panel
         printf " store: ${blue}%s${rst}\n" "$LFILE"
-        if [ -n "$SHOW_SERIAL" ]; then
-            printf " %-10s %-39s %s\n" "Valid to" "Serial No" "Alias"
-        else
-            printf " %-10s %s\n" "Valid to" "Alias"
-        fi
+        printf " %-10s" "Valid to"
+        [ -n "$SHOW_SERIAL" ] && printf " %-39s" "Serial No"
+        [ -n "$SHOW_TYPE" ] && printf " %-16s" "Storetype"
+        printf " %s\n" "Alias"
     fi
     delimiter=$(( $(tput cols) - 2 ))
     printf " "
@@ -244,7 +314,7 @@ print_certs() {
     fi
 
     while [ $cnt -le $commonMax ]; do
-        if [ -n "$RFILE" ]; then
+        if [ -n "$RFILE" ]; then # two-panels
             lcolor="" && rcolor=""
             if [ $cnt -eq $LENTRY ]; then
                 [ $TAB == "L" ] && lcolor=${blueb} || lcolor=${blue}
@@ -268,8 +338,15 @@ print_certs() {
                 rvcolor="${rcolor}"
             fi
 
-            printf "%1s${lvcolor}%10s${rst}${lcolor} %-${aliasWidth}s${rst} |%1s${rvcolor}%10s${rst}${rcolor} %-${aliasWidth}s${rst}\n" "${Lflags[$cnt]}" "${LcertValid[$cnt]}" "${LcertName[$cnt]:0:$aliasWidth}" "${Rflags[$cnt]}" "${RcertValid[$cnt]}" "${RcertName[$cnt]:0:$aliasWidth}"
-        else
+            printf "%1s${lvcolor}%10s${rst}${lcolor}" "${Lflags[$cnt]}" "${LcertValid[$cnt]}"
+            [ -n "$SHOW_TYPE" ] && printf " %-16s" ${Ltype[$cnt]}
+            printf " %-${aliasWidth}s${rst}" "${LcertName[$cnt]:0:$aliasWidth}"
+            printf " |%1s${rvcolor}%10s${rst}${rcolor}" "${Rflags[$cnt]}" "${RcertValid[$cnt]}"
+            [ -n "$SHOW_TYPE" ] && printf " %-16s" ${Rtype[$cnt]}
+            printf " %-${aliasWidth}s${rst}" "${RcertName[$cnt]:0:$aliasWidth}"
+            printf "\n"     
+
+        else # single panel
             [ $cnt -eq $LENTRY ] && lcolor="${blueb}" || lcolor=""
             if [ "${LcertDays[$cnt]}" -lt 20 ]; then
                 lvcolor="${lcolor}${red}"
@@ -278,12 +355,10 @@ print_certs() {
             else
                 lvcolor="${lcolor}"
             fi
-            if [ -n "$SHOW_SERIAL" ]; then
-                printf " ${lvcolor}%10s${rst}${lcolor} %-39s %s${rst}\n" "${LcertValid[$cnt]}" ${LcertSerial[$cnt]} "${LcertName[$cnt]}"
-            else
-                localWidth=$(( $(tput cols) - 13 ))
-                printf " ${lvcolor}%10s${rst}${lcolor} %-${aliasWidth}s${rst}\n" "${LcertValid[$cnt]}" "${LcertName[$cnt]:0:$localWidth}"
-            fi
+            printf " ${lvcolor}%10s${rst}${lcolor}" "${LcertValid[$cnt]}"
+            [ -n "$SHOW_SERIAL" ] && printf " %-39s" ${LcertSerial[$cnt]}
+            [ -n "$SHOW_TYPE" ] && printf " %-16s" ${Ltype[$cnt]}
+            printf " %-${aliasWidth}s${rst}\n" "${LcertName[$cnt]:0:$aliasWidth}"
         fi
         cnt+=1
     done
@@ -585,7 +660,6 @@ clean_compare() {
 # Parsing arguments
 if [ -n "$1" -a "$1" == "--update" ]; then
     [ -n "$DEBUG" ] && debug "trying to update $0"
-    CUR_VERSION="$(grep -oP '^# Version \K.*' $0)"
     printf "${green}Checking for new version of jks manager${rst}\n"
     printf "Current version: ${blue}${CUR_VERSION}${rst}\n"
     NEW_VERSION="$(curl -k -s https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh|grep -oP '^# Version \K.*')"
@@ -602,6 +676,11 @@ if [ -n "$1" -a "$1" == "--update" ]; then
     fi
     printf "${green}Successfully updated to version ${blue}${NEW_VERSION}${rst}\n"
     exit 0
+fi
+
+if [ -n "$1" -a "$1" == "--version" ]; then
+  printf "Current version: ${blue}${CUR_VERSION}${rst}\n"
+  exit 0
 fi
 
 if [ -n "$1" -a "$1" != "--help" ]; then
@@ -636,11 +715,14 @@ while true; do
     tput home
     print_certs
     
-    if [ -n "$RFILE" ]; then
-        printf "\n F3:${green}I${rst}nfo F5:${green}C${rst}opy F6:${green}R${rst}ename F8:${red}D${rst}elete c${green}O${rst}mpare ${green}E${rst}xport i${green}M${rst}port F10:${red}Q${rst}uit "
-    else
-        printf "\n F3:${green}I${rst}nfo F6:${green}R${rst}ename F8:${red}D${rst}elete ${green}E${rst}xport i${green}M${rst}port ${green}S${rst}erial F10:${red}Q${rst}uit "
-    fi
+    printf "\n F1:${green}H${rst}elp"
+    printf " F3:${green}I${rst}nfo"
+    [ -n "$RFILE" ] && printf " F5:${green}C${rst}opy"
+    printf " F6:${green}R${rst}ename F8:${red}D${rst}elete"
+    [ -z "$RFILE" ] && printf " c${green}O${rst}mpare"
+    printf " ${green}E${rst}xport i${green}M${rst}port"
+    [ -z "$RFILE" ] && printf " ${green}S${rst}erial"
+    printf " ${green}T${rst}ype F10:${red}Q${rst}uit "
 
     # Special keypress could take up to 4 characters
     read -rsN1 keypress
@@ -655,8 +737,6 @@ while true; do
     tput el1 # clear line from escaped chars
 
     case "$keypress" in
-        q|Q|'[21~')	# q/Q/F10
-            printf "\n${green}Good bye${rst}\n"; exit 0;;
         '[A')		# Up arrow
             if [ $TAB == "L" ]; then
                 if [ $LFileEmpty!="1" ]; then
@@ -713,26 +793,22 @@ while true; do
                 export_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS"
             fi
             clear;;
-        c|C|'[15~')	# c/C/F5
-            [ -z "$RFILE" ] && continue
-            if [ $TAB == "L" ]; then
-                copy_cert "${LcertName[$LENTRY]}" "$LFILE" "$LSTOREPASS" "$RFILE" "$RSTOREPASS"
-            else
-                copy_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS" "$LFILE" "$LSTOREPASS"
-            fi
-            clear;;
-        d|D|'[19~')	# d/D/F8
-            if [ $TAB == "L" ]; then
-                delete_cert "${LcertName[$LENTRY]}" "${LFILE}" "${LSTOREPASS}"
-            else
-                delete_cert "${RcertName[$RENTRY]}" "${RFILE}" "${RSTOREPASS}"
-            fi
+        h|H|'[11~')	# h/H/F1
+            inline_help
             clear;;
         i|I|'[13~'|OR)	# i/I/F3 ( ^[OR - F3 in tectia )
             if [ ${TAB} == "L" ]; then
                 print_details "${LcertName[$LENTRY]}" "${LFILE}" "${LSTOREPASS}"
             else
                 print_details "${RcertName[$RENTRY]}" "${RFILE}" "${RSTOREPASS}"
+            fi
+            clear;;
+        c|C|'[15~')	# c/C/F5
+            [ -z "$RFILE" ] && continue
+            if [ $TAB == "L" ]; then
+                copy_cert "${LcertName[$LENTRY]}" "$LFILE" "$LSTOREPASS" "$RFILE" "$RSTOREPASS"
+            else
+                copy_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS" "$LFILE" "$LSTOREPASS"
             fi
             clear;;
         r|R|'[17~')	# r/R/F6
@@ -742,9 +818,21 @@ while true; do
                 rename_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS"
             fi
             clear;;
+        d|D|'[19~')	# d/D/F8
+            if [ $TAB == "L" ]; then
+                delete_cert "${LcertName[$LENTRY]}" "${LFILE}" "${LSTOREPASS}"
+            else
+                delete_cert "${RcertName[$RENTRY]}" "${RFILE}" "${RSTOREPASS}"
+            fi
+            clear;;
+        q|Q|'[21~')	# q/Q/F10
+            printf "\n${green}Good bye${rst}\n"; exit 0;;
         s|S)
             [ -n "$RFILE" ] && continue
             [ -n "$SHOW_SERIAL" ] && SHOW_SERIAL="" || SHOW_SERIAL="Y"
+            clear;;
+        t|T)
+            [ -n "$SHOW_TYPE" ] && SHOW_TYPE="" || SHOW_TYPE="Y"
             clear;;
         $'\t')          # tab
             [ "$TAB" == "L" ] && switch_tab R || switch_tab L;;
