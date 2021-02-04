@@ -715,14 +715,12 @@ while true; do
     tput home
     print_certs
     
-    printf "\n F1:${green}H${rst}elp"
-    printf " F3:${green}I${rst}nfo"
+    printf "\n F1:${green}H${rst}elp F3:${green}I${rst}nfo"
     [ -n "$RFILE" ] && printf " F5:${green}C${rst}opy"
-    printf " F6:${green}R${rst}ename F8:${red}D${rst}elete"
-    [ -z "$RFILE" ] && printf " c${green}O${rst}mpare"
-    printf " ${green}E${rst}xport i${green}M${rst}port"
+    printf " F6:${green}R${rst}ename F8:${red}D${rst}elete ${green}E${rst}xport i${green}M${rst}port ${green}T${rst}ype"
+    [ -n "$RFILE" ] && printf " c${green}O${rst}mpare"
     [ -z "$RFILE" ] && printf " ${green}S${rst}erial"
-    printf " ${green}T${rst}ype F10:${red}Q${rst}uit "
+    printf " F10:${red}Q${rst}uit "
 
     # Special keypress could take up to 4 characters
     read -rsN1 keypress
