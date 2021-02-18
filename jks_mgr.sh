@@ -494,6 +494,7 @@ copy_cert() {
         RcertSerial[${counter}]=${LcertSerial[${LENTRY}]}
         RcertValid[${counter}]=${LcertValid[${LENTRY}]}
         RcertDays[${counter}]=${LcertDays[${LENTRY}]}
+        Rtype[${counter}]=${Ltype[${LENTRY}]}
     else
         while [ $counter -le ${LcertMax} ]; do
             if [ "${LcertName[${counter}]}" == "${RcertName[${RENTRY}]}" ]; then
@@ -508,6 +509,7 @@ copy_cert() {
         LcertSerial[${counter}]=${RcertSerial[${RENTRY}]}
         LcertValid[${counter}]=${RcertValid[${RENTRY}]}
         LcertDays[${counter}]=${RcertDays[${RENTRY}]}
+        Ltype[${counter}]=${Rtype[${RENTRY}]}
     fi
     [ compareFlag -eq 1 ] && compare_certs
     delay 2 "Certificate ${blue}$1${rst} succesfully copied from ${blue}$2${rst} to ${blue}$4${rst}\n"
