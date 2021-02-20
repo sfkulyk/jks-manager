@@ -2,7 +2,7 @@
 #
 # Java keystore bash manager
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.81
+# Version 1.9
 #
 # Update:
 # cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
@@ -29,8 +29,9 @@
 # * DEBUG feature. Just set variable to non-empty to see and confirm all commands
 # * Add --version console option
 # * Add --help console option to see usage help
-# * show/hide sertificate entry type column
+# * show/hide certificate entry type column
 # * add inline help (F1)
+# * Add suffixes to certificate entry type CA(clientAuth) / SA(serverAuth)
 #
 
 # If you change default password, don't forget to clear it before sharing your file outside
@@ -84,7 +85,6 @@ help_function() {
     printf " ${green}jks_mgr.sh --update${rst}\n"
     printf "     Automatically check and download new version from github:\n"
     printf "     ${blue}https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh${rst}\n"
-
     printf " ${green}jks_mgr.sh --version${rst}\n"
     printf "     Show current version\n"
     printf " ${green}jks_mgr.sh --help${rst}\n"
@@ -112,7 +112,8 @@ inline_help() {
     printf "    You will be asked for DNS and optionally port (default is 443)\n"
     printf "    For example: google.com\n"
     printf "                 google.com:443\n"
-    printf " ${green}T${rst}: show/hide certificate entry Type\n"
+    printf " ${green}T${rst}: show/hide certificate entry Type - \n"
+    printf "    Show PrivateKeyEntry/TrustedCertEntry + suffixes CA(clientAuth)/SA(serverAuth)\n"
     printf " ${green}S${rst}: show/hide Serial ID (only for single-panel mode)\n"
     printf "\n run ${green}jks_mgr.sh --help${rst} to see usage help"
     printf "\n Press any key to return"
@@ -150,7 +151,7 @@ adjust_window() {
     WindowWidth="$(tput cols)"
     if [ -n "$RFILE" ]; then # two-panel
         used=24 # Valid to
-        [ -n "$SHOW_TYPE" ] && used=$(( $used+34 ))
+        [ -n "$SHOW_TYPE" ] && used=$(( $used+28 ))
         localWidth=$(( ( $WindowWidth - $used ) / 2 - 1 )) # 25 cols for valid date, divider and spaces
         if [ $localWidth -ne $aliasWidth ]; then
             aliasWidth=$localWidth
@@ -160,7 +161,7 @@ adjust_window() {
     else
         used=13 # Valid to
         [ -n "$SHOW_SERIAL" ] && used=$(( $used+40 ))
-        [ -n "$SHOW_TYPE" ] && used=$(( $used+17 ))
+        [ -n "$SHOW_TYPE" ] && used=$(( $used+13 ))
         localWidth=$(( $WindowWidth - $used ))
         if [ $localWidth -ne $aliasWidth ]; then
             aliasWidth=$localWidth
@@ -237,7 +238,7 @@ delete_cert() {
 init_certs() {
     [ -n "$3" ] && localTAB=$3 || localTAB=L
     printf "Opening ${green}$1${rst} ... as ${localTAB}\n"
-    typeset -i cnt=1
+    typeset -i cnt=0
 
     if [ ! -s $1 ]; then
       printf "File ${blue}$1${rst} doesn't exists. Do you want to create new empty store (${green}y${rst}/${red}n${rst})?: "
@@ -258,26 +259,33 @@ init_certs() {
         if [ "$REPLY" == "--" ]; then
              continue
         elif expr "$REPLY" : "Alias name: ">/dev/null; then
-            [ "$localTAB" == L ] && LcertName[$cnt]="${REPLY##*: }" || RcertName[$cnt]="${REPLY##*: }"
-        elif expr "$REPLY" : "Serial number: ">/dev/null; then
-            [ "$localTAB" == L ] && LcertSerial[$cnt]="${REPLY##*: }" || RcertSerial[$cnt]="${REPLY##*: }"
-        elif expr "$REPLY" : "Entry type: ">/dev/null; then
-            [ "$localTAB" == L ] && Ltype[$cnt]="${REPLY##*: }" || Rtype[$cnt]="${REPLY##*: }"
-        else
-            validunix=$(/bin/date --date="${REPLY##*until: }" "+%s")
-            if [ "$localTAB" == L ]; then
-                     LcertValid[$cnt]=$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d") || RcertValid[$cnt]=$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d")
-                     LcertDays[$cnt]=$(( (${validunix} - $(/bin/date "+%s")) / 3600 / 24 ))
-                     LcertMax=$cnt
-            else
-                     RcertValid[$cnt]=$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d") || RcertValid[$cnt]=$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d")
-                     RcertDays[$cnt]=$(( (${validunix} - $(/bin/date "+%s")) / 3600 / 24 ))
-                     RcertMax=$cnt
-            fi
             cnt+=1
+            eval ${localTAB}certMax=$cnt
+            eval ${localTAB}certName[$cnt]=\"${REPLY##*: }\"
+        elif expr "$REPLY" : "Serial number: ">/dev/null; then
+            eval ${localTAB}certSerial[$cnt]="${REPLY##*: }"
+        elif expr "$REPLY" : "Entry type: PrivateKeyEntry">/dev/null; then
+            eval ${localTAB}type[$cnt]="Private"
+        elif expr "$REPLY" : "Entry type: trustedCertEntry">/dev/null; then
+            eval ${localTAB}type[$cnt]="Trusted"
+        elif expr "$REPLY" : "Valid from: ">/dev/null; then
+            validunix=$(/bin/date --date="${REPLY##*until: }" "+%s")
+            eval ${localTAB}certValid[$cnt]=$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d")
+            eval ${localTAB}certDays[$cnt]=$(( (${validunix} - $(/bin/date "+%s")) / 3600 / 24 ))
+        elif expr "$REPLY" : "serverAuth">/dev/null; then
+            if [ "$localTAB" == L ]; then
+              Ltype[$cnt]="${Ltype[$cnt]}_SA"
+            else
+              Rtype[$cnt]="${Rtype[$cnt]}_SA"
+            fi
+        elif expr "$REPLY" : "clientAuth">/dev/null; then
+            if [ "$localTAB" == L ]; then
+              Ltype[$cnt]="${Ltype[$cnt]}CA"
+            else
+              Rtype[$cnt]="${Rtype[$cnt]}CA"
+            fi
         fi
-    done<<<"$(keytool -list -v -keystore $1 -storepass $2|grep -P '(Alias name:|Entry type:|Serial number:|Valid from:)'|grep 'Alias name:' -A 3)"
-    # second grep with '-A 2' used to get certificate itself details and skip details of other certificate chain members
+    done<<<"$(keytool -list -v -keystore $1 -storepass $2 2>/dev/null|sed -nr '/Alias/,/(Certificate\[2\]|\*\*\*\*\*)/p'|grep -P '(Alias name:|Entry type:|Serial number:|Valid from:|serverAuth|clientAuth)')"
 }
 
 # Main print panels procedure.
@@ -287,27 +295,28 @@ print_certs() {
     typeset -i commonMax=${LcertMax}
 
     adjust_window
-
+    hdr_alias="Alias"
+ 
     if [ -n "$RFILE" ]; then # two-panel
         
         [ "${RcertMax}" -gt "${LcertMax}" ] && commonMax=${RcertMax}
         headerWidth=$(( $aliasWidth + 5 ))
-        [ -n "$SHOW_TYPE" ] && headerWidth=$(( $headerWidth + 17 ))
+        [ -n "$SHOW_TYPE" ] && headerWidth=$(( $headerWidth + 13 ))
         printf " store: ${blue}%-$(( $headerWidth ))s${rst}" "$LFILE"
         printf "| store: ${blue}%-$(( $headerWidth -1 ))s${rst}\n" "$RFILE"
 
         printf " %-10s" "Valid to"
-        [ -n "$SHOW_TYPE" ] && printf " %-16s" "Storetype"
-        printf " %-${aliasWidth}s |" "Alias"
+        [ -n "$SHOW_TYPE" ] && printf " %-12s" "Storetype"
+        printf " %-${aliasWidth}s |" "${hdr_alias:0:$aliasWidth}"
         printf " %-10s" "Valid to"
-        [ -n "$SHOW_TYPE" ] && printf " %-16s" "Storetype"
-        printf " %-${aliasWidth}s\n" "Alias"
+        [ -n "$SHOW_TYPE" ] && printf " %-12s" "Storetype"
+        printf " %-${aliasWidth}s\n" "${hdr_alias:0:$aliasWidth}"
     else # single panel
         printf " store: ${blue}%s${rst}\n" "$LFILE"
         printf " %-10s" "Valid to"
         [ -n "$SHOW_SERIAL" ] && printf " %-39s" "Serial No"
-        [ -n "$SHOW_TYPE" ] && printf " %-16s" "Storetype"
-        printf " %s\n" "Alias"
+        [ -n "$SHOW_TYPE" ] && printf " %-12s" "Storetype"
+        printf " %s\n" "${hdr_alias:0:$aliasWidth}"
     fi
     delimiter=$(( $(tput cols) - 2 ))
     printf " "
@@ -344,10 +353,10 @@ print_certs() {
             fi
 
             printf "%1s${lvcolor}%10s${rst}${lcolor}" "${Lflags[$cnt]}" "${LcertValid[$cnt]}"
-            [ -n "$SHOW_TYPE" ] && printf " %-16s" ${Ltype[$cnt]}
+            [ -n "$SHOW_TYPE" ] && printf " %-12s" ${Ltype[$cnt]}
             printf " %-${aliasWidth}s${rst}" "${LcertName[$cnt]:0:$aliasWidth}"
             printf " |%1s${rvcolor}%10s${rst}${rcolor}" "${Rflags[$cnt]}" "${RcertValid[$cnt]}"
-            [ -n "$SHOW_TYPE" ] && printf " %-16s" ${Rtype[$cnt]}
+            [ -n "$SHOW_TYPE" ] && printf " %-12s" ${Rtype[$cnt]}
             printf " %-${aliasWidth}s${rst}" "${RcertName[$cnt]:0:$aliasWidth}"
             printf "\n"     
 
@@ -362,7 +371,7 @@ print_certs() {
             fi
             printf " ${lvcolor}%10s${rst}${lcolor}" "${LcertValid[$cnt]}"
             [ -n "$SHOW_SERIAL" ] && printf " %-39s" ${LcertSerial[$cnt]}
-            [ -n "$SHOW_TYPE" ] && printf " %-16s" ${Ltype[$cnt]}
+            [ -n "$SHOW_TYPE" ] && printf " %-12s" ${Ltype[$cnt]}
             printf " %-${aliasWidth}s${rst}\n" "${LcertName[$cnt]:0:$aliasWidth}"
         fi
         cnt+=1
@@ -457,7 +466,7 @@ print_details() {
         localDays=${RcertDays[$RENTRY]}
     fi
     printf "\nDetails for certificate [${green}${localAlias}${rst}]:\n"
-    keytool -list -v -alias "$localAlias" -keystore "$2" -storepass "$3" 2>/dev/null| sed -n '/Alias name:/p;/Creation date:/p;/Entry type:/p;/Owner:/p;/Issuer:/p;/Serial number:/p;/Valid from:/p;/DNSName:/p'
+    keytool -list -v -alias "$localAlias" -keystore "$2" -storepass "$3" 2>/dev/null| sed -n '/Alias name:/p;/Creation date:/p;/Entry type:/p;/Owner:/p;/Issuer:/p;/Serial number:/p;/Valid from:/p;/DNSName:/p;/serverAuth/p;/clientAuth/p'
     printf "\nPress any key"
     read -rsn1
 }
