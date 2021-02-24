@@ -57,14 +57,14 @@ SHOW_SERIAL=""  # OFF by default. Only for single-panel mode
 DEBUG=""        # If not empty, shows keytool/openssl cmds and wait for confirm
 
 # colors
-red=$(tput bold;tput setaf 1)
-redb=$(tput bold;tput setab 6;tput setaf 1)
-green=$(tput bold;tput setaf 2)
-blue=$(tput bold;tput setaf 6)
-blueb=$(tput bold;tput setab 6)
-yellow=$(tput bold;tput setaf 3)
-yellowb=$(tput bold;tput setab 6;tput setaf 3)
-rst=$(tput sgr0)
+red='[1m[31m'
+redb='[1m[46m[31m'
+green='[1m[32m'
+blue='[1m[36m'
+blueb='[1m[46m'
+yellow='[1m[33m'
+yellowb='[1m[46m[33m'
+rst='(B[m'
 
 help_function() {
     printf " ${blue}Keystore manager ${CUR_VERSION}\n"
@@ -134,11 +134,8 @@ debug() {
 
 # automatically adjust windows height and width if it is less then 22
 adjust_window() {
-    if [ -n "$BASH_VERSION" ]; then
-        localHeight=$((${LINES}-7))
-    else
-        localHeight=$(( $(tput lines)-7 )) # 7 lines for header and footer
-    fi
+    read WindowHeight WindowWidth<<<$(stty size)
+    localHeight=$((${WindowHeight}-7))
     if [ $pageHeight -ne $localHeight ]; then
     pageHeight=$localHeight
         if [ $pageHeight -lt 0 ]; then
@@ -152,11 +149,6 @@ adjust_window() {
         clear
     fi
 
-    if [ -n "$BASH_VERSION" ]; then
-        WindowWidth=$COLUMNS
-    else
-        WindowWidth="$(tput cols)"
-    fi
     if [ -n "$RFILE" ]; then # two-panel
         used=24 # Valid to
         [ -n "$SHOW_TYPE" ] && used=$(( $used+28 ))
@@ -332,11 +324,8 @@ print_certs() {
         [ -n "$SHOW_TYPE" ] && printf " %-12s" "Storetype"
         printf " %s\n" "${hdr_alias:0:$aliasWidth}"
     fi
-    if [ -n "$BASH_VERSION" ]; then
-        delimiter=$((${COLUMNS}-2))
-    else
-        delimiter=$(($(tput cols)-2))
-    fi
+    read WindowHeight WindowWidth<<<$(stty size)
+    delimiter=$((${WindowWidth}-2))
     printf " "
     eval printf "%0.s-" {1..${delimiter}}
     printf "\n"
@@ -724,7 +713,7 @@ clear
 
 # main loop
 while true; do
-    tput home
+    printf '[H'
     print_certs
     
     printf "\n F1:${green}H${rst}elp F3:${green}I${rst}nfo"
@@ -744,7 +733,7 @@ while true; do
         keypress=${k1}${k2}${k3}${k4}
         unset k1 k2 k3 k4
     fi
-    tput el1 # clear line from escaped chars
+    printf '[1K' # clear line from escaped chars
 
     case "$keypress" in
         '[A')		# Up arrow
