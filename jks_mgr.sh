@@ -1,8 +1,8 @@
-#!/bin/ksh
+#!/usr/bin/env bash
 #
 # Java keystore bash manager
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.9
+# Version 1.10
 #
 # Update:
 # cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
@@ -47,9 +47,9 @@ typeset -A LcertName LcertSerial LcertValid LcertDays Lflags Ltype
 typeset -i LcertMax=0 LENTRY=1
 typeset -A RcertName RcertSerial RcertValid RcertDays Rflags Rtype
 typeset -i RcertMax=0 RENTRY=1
+typeset -i POSITION=1      # Screen position
 escape_char=$(printf "\u1b") # for keypress navigation
 TAB="L"         # LEFT panel is default (for single mode)
-POSITION=1      # Screen position
 pageHeight=10   # active menu height
 aliasWidth=12   # default alias width for single mode
 compareFlag=0
@@ -134,7 +134,11 @@ debug() {
 
 # automatically adjust windows height and width if it is less then 22
 adjust_window() {
-    localHeight=$(( $(tput lines)-7 )) # 7 lines for header and footer
+    if [ -n "$BASH_VERSION" ]; then
+        localHeight=$((${LINES}-7))
+    else
+        localHeight=$(( $(tput lines)-7 )) # 7 lines for header and footer
+    fi
     if [ $pageHeight -ne $localHeight ]; then
     pageHeight=$localHeight
         if [ $pageHeight -lt 0 ]; then
@@ -148,7 +152,11 @@ adjust_window() {
         clear
     fi
 
-    WindowWidth="$(tput cols)"
+    if [ -n "$BASH_VERSION" ]; then
+        WindowWidth=$COLUMNS
+    else
+        WindowWidth="$(tput cols)"
+    fi
     if [ -n "$RFILE" ]; then # two-panel
         used=24 # Valid to
         [ -n "$SHOW_TYPE" ] && used=$(( $used+28 ))
@@ -270,8 +278,15 @@ init_certs() {
             eval ${localTAB}type[$cnt]="Trusted"
         elif expr "$REPLY" : "Valid from: ">/dev/null; then
             validunix=$(/bin/date --date="${REPLY##*until: }" "+%s")
-            eval ${localTAB}certValid[$cnt]=$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d")
-            eval ${localTAB}certDays[$cnt]=$(( (${validunix} - $(/bin/date "+%s")) / 3600 / 24 ))
+            tmpDays=$(( (${validunix} - $(/bin/date "+%s")) / 3600 / 24 ))
+            eval ${localTAB}certDays[$cnt]=${tmpDays}
+            if [ ${tmpDays} -lt ${CRITICAL_DAYS} ]; then
+                eval ${localTAB}certValid[$cnt]="${red}$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d")"
+            elif [ ${tmpDays} -lt ${WARNING_DAYS} ]; then
+                eval ${localTAB}certValid[$cnt]="${yellow}$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d")"
+            else
+                eval ${localTAB}certValid[$cnt]="$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d")"
+            fi
         elif expr "$REPLY" : "serverAuth">/dev/null; then
             if [ "$localTAB" == L ]; then
               Ltype[$cnt]="${Ltype[$cnt]}_SA"
@@ -298,7 +313,6 @@ print_certs() {
     hdr_alias="Alias"
  
     if [ -n "$RFILE" ]; then # two-panel
-        
         [ "${RcertMax}" -gt "${LcertMax}" ] && commonMax=${RcertMax}
         headerWidth=$(( $aliasWidth + 5 ))
         [ -n "$SHOW_TYPE" ] && headerWidth=$(( $headerWidth + 13 ))
@@ -318,7 +332,11 @@ print_certs() {
         [ -n "$SHOW_TYPE" ] && printf " %-12s" "Storetype"
         printf " %s\n" "${hdr_alias:0:$aliasWidth}"
     fi
-    delimiter=$(( $(tput cols) - 2 ))
+    if [ -n "$BASH_VERSION" ]; then
+        delimiter=$((${COLUMNS}-2))
+    else
+        delimiter=$(($(tput cols)-2))
+    fi
     printf " "
     eval printf "%0.s-" {1..${delimiter}}
     printf "\n"
@@ -337,39 +355,17 @@ print_certs() {
                 [ $TAB == "R" ] && rcolor=${blueb} || rcolor=${blue}
             fi
 
-            if [ "${LcertDays[$cnt]}" -lt $CRITICAL_DAYS ]; then
-                lvcolor="${lcolor}${red}"
-            elif [ "${LcertDays[$cnt]}" -lt $WARNING_DAYS ]; then
-                lvcolor="${lcolor}${yellow}"
-            else
-                lvcolor="${lcolor}"
-            fi
-            if [ "${RcertDays[$cnt]}" -lt $CRITICAL_DAYS ]; then
-                rvcolor="${rcolor}${red}"
-            elif [ "${RcertDays[$cnt]}" -lt $WARNING_DAYS ]; then
-                rvcolor="${rcolor}${yellow}"
-            else
-                rvcolor="${rcolor}"
-            fi
-
-            printf "%1s${lvcolor}%10s${rst}${lcolor}" "${Lflags[$cnt]}" "${LcertValid[$cnt]}"
+            printf "%1s${lcolor}%10s${rst}${lcolor}" "${Lflags[$cnt]}" "${LcertValid[$cnt]}"
             [ -n "$SHOW_TYPE" ] && printf " %-12s" ${Ltype[$cnt]}
             printf " %-${aliasWidth}s${rst}" "${LcertName[$cnt]:0:$aliasWidth}"
-            printf " |%1s${rvcolor}%10s${rst}${rcolor}" "${Rflags[$cnt]}" "${RcertValid[$cnt]}"
+            printf " |%1s${rcolor}%10s${rst}${rcolor}" "${Rflags[$cnt]}" "${RcertValid[$cnt]}"
             [ -n "$SHOW_TYPE" ] && printf " %-12s" ${Rtype[$cnt]}
             printf " %-${aliasWidth}s${rst}" "${RcertName[$cnt]:0:$aliasWidth}"
             printf "\n"     
 
         else # single panel
             [ $cnt -eq $LENTRY ] && lcolor="${blueb}" || lcolor=""
-            if [ "${LcertDays[$cnt]}" -lt 20 ]; then
-                lvcolor="${lcolor}${red}"
-            elif [ "${LcertDays[$cnt]}" -lt 60 ]; then
-                lvcolor="${lcolor}${yellow}"
-            else
-                lvcolor="${lcolor}"
-            fi
-            printf " ${lvcolor}%10s${rst}${lcolor}" "${LcertValid[$cnt]}"
+            printf " ${lcolor}%10s${rst}${lcolor}" "${LcertValid[$cnt]}"
             [ -n "$SHOW_SERIAL" ] && printf " %-39s" ${LcertSerial[$cnt]}
             [ -n "$SHOW_TYPE" ] && printf " %-12s" ${Ltype[$cnt]}
             printf " %-${aliasWidth}s${rst}\n" "${LcertName[$cnt]:0:$aliasWidth}"
