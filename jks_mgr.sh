@@ -2,7 +2,7 @@
 #
 # Java keystore bash manager
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.10
+# Version 1.11
 #
 # Update:
 # cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
@@ -64,7 +64,10 @@ blue='[1m[36m'
 blueb='[1m[46m'
 yellow='[1m[33m'
 yellowb='[1m[46m[33m'
+uline='[4m'
+nline='[24m'
 rst='(B[m'
+
 
 help_function() {
     printf " ${blue}Keystore manager ${CUR_VERSION}\n"
@@ -151,7 +154,7 @@ adjust_window() {
 
     if [ -n "$RFILE" ]; then # two-panel
         used=24 # Valid to
-        [ -n "$SHOW_TYPE" ] && used=$(( $used+28 ))
+        [ -n "$SHOW_TYPE" ] && used=$(( $used+30 ))
         localWidth=$(( ( $WindowWidth - $used ) / 2 - 1 )) # 25 cols for valid date, divider and spaces
         if [ $localWidth -ne $aliasWidth ]; then
             aliasWidth=$localWidth
@@ -161,7 +164,7 @@ adjust_window() {
     else
         used=13 # Valid to
         [ -n "$SHOW_SERIAL" ] && used=$(( $used+40 ))
-        [ -n "$SHOW_TYPE" ] && used=$(( $used+13 ))
+        [ -n "$SHOW_TYPE" ] && used=$(( $used+14 ))
         localWidth=$(( $WindowWidth - $used ))
         if [ $localWidth -ne $aliasWidth ]; then
             aliasWidth=$localWidth
@@ -279,17 +282,17 @@ init_certs() {
             else
                 eval ${localTAB}certValid[$cnt]="$(/bin/date --date="${REPLY##*until: }" "+%Y-%m-%d")"
             fi
-        elif expr "$REPLY" : "serverAuth">/dev/null; then
-            if [ "$localTAB" == L ]; then
+        elif expr "$REPLY" : ".*clientAuth.*">/dev/null; then
+            if [ "${localTAB}" == L ]; then
+              Ltype[$cnt]="${Ltype[$cnt]}_CA"
+            else
+              Rtype[$cnt]="${Rtype[$cnt]}_CA"
+            fi
+        elif expr "$REPLY" : ".*serverAuth.*">/dev/null; then
+            if [ "${localTAB}" == L ]; then
               Ltype[$cnt]="${Ltype[$cnt]}_SA"
             else
               Rtype[$cnt]="${Rtype[$cnt]}_SA"
-            fi
-        elif expr "$REPLY" : "clientAuth">/dev/null; then
-            if [ "$localTAB" == L ]; then
-              Ltype[$cnt]="${Ltype[$cnt]}CA"
-            else
-              Rtype[$cnt]="${Rtype[$cnt]}CA"
             fi
         fi
     done<<<"$(keytool -list -v -keystore $1 -storepass $2 2>/dev/null|sed -nr '/Alias/,/(Certificate\[2\]|\*\*\*\*\*)/p'|grep -P '(Alias name:|Entry type:|Serial number:|Valid from:|serverAuth|clientAuth)')"
@@ -307,21 +310,21 @@ print_certs() {
     if [ -n "$RFILE" ]; then # two-panel
         [ "${RcertMax}" -gt "${LcertMax}" ] && commonMax=${RcertMax}
         headerWidth=$(( $aliasWidth + 5 ))
-        [ -n "$SHOW_TYPE" ] && headerWidth=$(( $headerWidth + 13 ))
+        [ -n "$SHOW_TYPE" ] && headerWidth=$(( $headerWidth + 14 ))
         printf " store: ${blue}%-$(( $headerWidth ))s${rst}" "$LFILE"
         printf "| store: ${blue}%-$(( $headerWidth -1 ))s${rst}\n" "$RFILE"
 
         printf " %-10s" "Valid to"
-        [ -n "$SHOW_TYPE" ] && printf " %-12s" "Storetype"
+        [ -n "$SHOW_TYPE" ] && printf " %-13s" "Storetype"
         printf " %-${aliasWidth}s |" "${hdr_alias:0:$aliasWidth}"
         printf " %-10s" "Valid to"
-        [ -n "$SHOW_TYPE" ] && printf " %-12s" "Storetype"
+        [ -n "$SHOW_TYPE" ] && printf " %-13s" "Storetype"
         printf " %-${aliasWidth}s\n" "${hdr_alias:0:$aliasWidth}"
     else # single panel
         printf " store: ${blue}%s${rst}\n" "$LFILE"
         printf " %-10s" "Valid to"
         [ -n "$SHOW_SERIAL" ] && printf " %-39s" "Serial No"
-        [ -n "$SHOW_TYPE" ] && printf " %-12s" "Storetype"
+        [ -n "$SHOW_TYPE" ] && printf " %-13s" "Storetype"
         printf " %s\n" "${hdr_alias:0:$aliasWidth}"
     fi
     read WindowHeight WindowWidth<<<$(stty size)
@@ -345,10 +348,10 @@ print_certs() {
             fi
 
             printf "%1s${lcolor}%10s${rst}${lcolor}" "${Lflags[$cnt]}" "${LcertValid[$cnt]}"
-            [ -n "$SHOW_TYPE" ] && printf " %-12s" ${Ltype[$cnt]}
+            [ -n "$SHOW_TYPE" ] && printf " %-13s" ${Ltype[$cnt]}
             printf " %-${aliasWidth}s${rst}" "${LcertName[$cnt]:0:$aliasWidth}"
             printf " |%1s${rcolor}%10s${rst}${rcolor}" "${Rflags[$cnt]}" "${RcertValid[$cnt]}"
-            [ -n "$SHOW_TYPE" ] && printf " %-12s" ${Rtype[$cnt]}
+            [ -n "$SHOW_TYPE" ] && printf " %-13s" ${Rtype[$cnt]}
             printf " %-${aliasWidth}s${rst}" "${RcertName[$cnt]:0:$aliasWidth}"
             printf "\n"     
 
@@ -356,7 +359,7 @@ print_certs() {
             [ $cnt -eq $LENTRY ] && lcolor="${blueb}" || lcolor=""
             printf " ${lcolor}%10s${rst}${lcolor}" "${LcertValid[$cnt]}"
             [ -n "$SHOW_SERIAL" ] && printf " %-39s" ${LcertSerial[$cnt]}
-            [ -n "$SHOW_TYPE" ] && printf " %-12s" ${Ltype[$cnt]}
+            [ -n "$SHOW_TYPE" ] && printf " %-13s" ${Ltype[$cnt]}
             printf " %-${aliasWidth}s${rst}\n" "${LcertName[$cnt]:0:$aliasWidth}"
         fi
         cnt+=1
@@ -716,12 +719,19 @@ while true; do
     printf '[H'
     print_certs
     
-    printf "\n F1:${green}H${rst}elp F3:${green}I${rst}nfo"
-    [ -n "$RFILE" ] && printf " F5:${green}C${rst}opy"
-    printf " F6:${green}R${rst}ename F8:${red}D${rst}elete ${green}E${rst}xport i${green}M${rst}port ${green}T${rst}ype"
-    [ -n "$RFILE" ] && printf " c${green}O${rst}mpare"
-    [ -z "$RFILE" ] && printf " ${green}S${rst}erial"
-    printf " F10:${red}Q${rst}uit "
+    HOTKEYS="\n"
+    HOTKEYS="$HOTKEYS ${blue}F1:Help"
+    HOTKEYS="$HOTKEYS ${blue}F3:Info"
+    [ -n "$RFILE" ] && HOTKEYS="$HOTKEYS ${green}F5:Copy"
+    HOTKEYS="$HOTKEYS ${green}F6:Rename"
+    HOTKEYS="$HOTKEYS ${red}F8:Delete"
+    HOTKEYS="$HOTKEYS ${green}Export"
+    HOTKEYS="$HOTKEYS ${green}iMport"
+    HOTKEYS="$HOTKEYS ${blue}Type"
+    [ -n "$RFILE" ] && HOTKEYS="$HOTKEYS ${green}cOmpare"
+    [ -z "$RFILE" ] && HOTKEYS="$HOTKEYS ${blue}Serial"
+    HOTKEYS="$HOTKEYS ${red}F10:Quit${rst} "
+    printf "$HOTKEYS"
 
     # Special keypress could take up to 4 characters
     read -rsN1 keypress
