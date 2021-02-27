@@ -1,14 +1,28 @@
 Java keystore manager
 Author: Sergii Kulyk aka Saboteur
 
-Small tool written in GNU shell.
-
-Allows to browse java jeystore (jks) files in linux.
-Supports common commands like delete, rename, view certificate details
-Supports dual-tab view with possibility of copy and compare two keystores
+Certificate console panel manager for Linux shell
 
 Requirements:
-keytool from JDK should be available
-standard gnu tools like grep
+	sed, grep and keytool from jdk should be available in PATH
+	It should work fine under bash, ksh, zsh and possibly all posix modern shells
 
-It should work fine under bash, ksh, zsh and possibly all posix shells.
+Features:
+	Browse keystores supported by keytool (JKS, PKCS12)
+	Available actions with certificates and keystores:
+		View details, Rename, Delete, Export to JKS, PKCS12, CER, PEM formats,
+		Import (directly from web-site)
+	in two-panel mode also available: Copy, Compare (by cert serial ID)
+
+Usage:
+	jks_mgr.sh <keystore>
+		open jks mgr in single-panel mode
+	jks_mgr.sh <keystore1> <keystore2>
+		open jks mgr in two-panel mode
+	jks_mgr.sh --update
+		Automatically check and download new version from github
+		https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh
+	jks_mgr.sh --version
+		Show current version
+	jks_mgr.sh --help
+		Show this help
