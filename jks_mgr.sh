@@ -2,7 +2,7 @@
 #
 # Java keystore bash manager
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.11
+# Version 1.12
 #
 # Update:
 # cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
@@ -56,7 +56,7 @@ compareFlag=0
 SHOW_SERIAL=""  # OFF by default. Only for single-panel mode
 DEBUG=""        # If not empty, shows keytool/openssl cmds and wait for confirm
 
-# colors
+# Init colors
 red='[1m[31m'
 redb='[1m[46m[31m'
 green='[1m[32m'
@@ -68,6 +68,19 @@ uline='[4m'
 nline='[24m'
 rst='(B[m'
 
+# Init special keys
+F1_KEY='[11~'
+F3_KEY='[13~'
+F5_KEY='[15~'
+F6_KEY='[17~'
+F8_KEY='[19~'
+F10_KEY='[21~'
+UP_KEY='[A'
+DOWN_KEY='[B'
+LEFT_KEY='[D'
+RIGHT_KEY='[C'
+TAB_KEY=$'\t'
+DEL_KEY='[3~'
 
 help_function() {
     printf " ${blue}Keystore manager ${CUR_VERSION}\n"
@@ -714,6 +727,9 @@ if [ -n "$RFILE" ]; then
 fi
 clear
 
+# Init special keys definition
+init_special_keys
+
 # main loop
 while true; do
     printf '[H'
@@ -733,20 +749,17 @@ while true; do
     HOTKEYS="$HOTKEYS ${red}F10:Quit${rst} "
     printf "$HOTKEYS"
 
-    # Special keypress could take up to 4 characters
-    read -rsN1 keypress
-    if [ "$keypress" == "$escape_char" ]; then
-        read -sn1 -t 0.01 k1
-        read -sn1 -t 0.01 k2
-        read -sn1 -t 0.01 k3
-        read -sn1 -t 0.01 k4
-        keypress=${k1}${k2}${k3}${k4}
-        unset k1 k2 k3 k4
-    fi
+    # Special keypress could take variable amount of characters
+    keypress=""
+    read -rsN1 keytap
+    while [ -n "$keytap" ]; do
+        keypress="${keypress}${keytap}"
+        read -sN1 -t 0.01 keytap
+    done
     printf '[1K' # clear line from escaped chars
 
     case "$keypress" in
-        '[A')		# Up arrow
+        $UP_KEY)
             if [ $TAB == "L" ]; then
                 if [ $LFileEmpty!="1" ]; then
                     LENTRY=$(( $LENTRY-1 )); [ $LENTRY -lt 1 ] && LENTRY=1
@@ -766,7 +779,7 @@ while true; do
                     fi
                 fi
             fi;;
-        '[B')		# Down arrow
+        $DOWN_KEY)
             if [ $TAB == 'L' ]; then
                 if [ $LFileEmpty!="1" ]; then
                     LENTRY=$(( $LENTRY+1 ))
@@ -788,9 +801,9 @@ while true; do
                     fi
                 fi
             fi;;
-        '[D')		# Left arrow
+        $LEFT_KEY)
             switch_tab L;;
-        '[C')		# Right arrow
+        $RIGHT_KEY)
             switch_tab R;;
         o|O)
             [ compareFlag -eq 0 ] && compare_certs || clean_compare
@@ -802,17 +815,17 @@ while true; do
                 export_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS"
             fi
             clear;;
-        h|H|'[11~')	# h/H/F1
+        h|H|$F1_KEY )
             inline_help
             clear;;
-        i|I|'[13~'|OR)	# i/I/F3 ( ^[OR - F3 in tectia )
+        i|I|$F3_KEY)
             if [ ${TAB} == "L" ]; then
                 print_details "${LcertName[$LENTRY]}" "${LFILE}" "${LSTOREPASS}"
             else
                 print_details "${RcertName[$RENTRY]}" "${RFILE}" "${RSTOREPASS}"
             fi
             clear;;
-        c|C|'[15~')	# c/C/F5
+        c|C|$F5_KEY)
             [ -z "$RFILE" ] && continue
             if [ $TAB == "L" ]; then
                 copy_cert "${LcertName[$LENTRY]}" "$LFILE" "$LSTOREPASS" "$RFILE" "$RSTOREPASS"
@@ -820,21 +833,21 @@ while true; do
                 copy_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS" "$LFILE" "$LSTOREPASS"
             fi
             clear;;
-        r|R|'[17~')	# r/R/F6
+        r|R|$F6_KEY)
             if [ $TAB == "L" ]; then
                 rename_cert "${LcertName[$LENTRY]}" "$LFILE" "$LSTOREPASS"
             else
                 rename_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS"
             fi
             clear;;
-        d|D|'[19~')	# d/D/F8
+        d|D|$F8_KEY|$DEL_KEY)
             if [ $TAB == "L" ]; then
                 delete_cert "${LcertName[$LENTRY]}" "${LFILE}" "${LSTOREPASS}"
             else
                 delete_cert "${RcertName[$RENTRY]}" "${RFILE}" "${RSTOREPASS}"
             fi
             clear;;
-        q|Q|'[21~')	# q/Q/F10
+        q|Q|$F10_KEY)
             printf "\n${green}Good bye${rst}\n"; exit 0;;
         s|S)
             [ -n "$RFILE" ] && continue
@@ -843,7 +856,7 @@ while true; do
         t|T)
             [ -n "$SHOW_TYPE" ] && SHOW_TYPE="" || SHOW_TYPE="Y"
             clear;;
-        $'\t')          # tab
+        "$TAB_KEY")
             [ "$TAB" == "L" ] && switch_tab R || switch_tab L;;
         m|M)
             import_from_www
