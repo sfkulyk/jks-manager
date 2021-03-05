@@ -2,7 +2,7 @@
 #
 # Java keystore bash manager
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.12
+# Version 1.13
 #
 # Update:
 # cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
@@ -69,18 +69,18 @@ nline='[24m'
 rst='(B[m'
 
 # Init special keys
-F1_KEY='[11~'
-F3_KEY='[13~'
-F5_KEY='[15~'
-F6_KEY='[17~'
-F8_KEY='[19~'
-F10_KEY='[21~'
-UP_KEY='[A'
-DOWN_KEY='[B'
-LEFT_KEY='[D'
-RIGHT_KEY='[C'
+F1_KEY=$'\e[11~'
+F3_KEY=$'\e[13~'
+F5_KEY=$'\e[15~'
+F6_KEY=$'\e[17~'
+F8_KEY=$'\e[19~'
+F10_KEY=$'\e[21~'
+UP_KEY=$'\e[A'
+DOWN_KEY=$'\e[B'
+LEFT_KEY=$'\e[D'
+RIGHT_KEY=$'\e[C'
 TAB_KEY=$'\t'
-DEL_KEY='[3~'
+DEL_KEY=$'\e[3~'
 
 help_function() {
     printf " ${blue}Keystore manager ${CUR_VERSION}\n"
