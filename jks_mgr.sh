@@ -2,7 +2,7 @@
 #
 # Java keystore bash manager
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.13
+# Version 1.14
 #
 # Update:
 # cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
@@ -32,6 +32,7 @@
 # * show/hide certificate entry type column
 # * add inline help (F1)
 # * Add suffixes to certificate entry type CA(clientAuth) / SA(serverAuth)
+# * add underline effect for enabled options
 #
 
 # If you change default password, don't forget to clear it before sharing your file outside
@@ -743,9 +744,12 @@ while true; do
     HOTKEYS="$HOTKEYS ${red}F8:Delete"
     HOTKEYS="$HOTKEYS ${green}Export"
     HOTKEYS="$HOTKEYS ${green}iMport"
-    HOTKEYS="$HOTKEYS ${blue}Type"
-    [ -n "$RFILE" ] && HOTKEYS="$HOTKEYS ${green}cOmpare"
-    [ -z "$RFILE" ] && HOTKEYS="$HOTKEYS ${blue}Serial"
+    [ "${SHOW_TYPE}" == "Y" ] && tmptxt="${uline}${blue}Type${nline}" || tmptxt="${blue}Type"
+    HOTKEYS="$HOTKEYS ${tmptxt}"
+    [ $compareFlag -eq 1 ] && tmptxt="${uline}${green}cOmpare${nline}" || tmptxt="${green}cOmpare"
+    [ -n "$RFILE" ] && HOTKEYS="$HOTKEYS ${tmptxt}"
+    [ "${SHOW_SERIAL}" == "Y" ] && tmptxt="${uline}${blue}Serial${nline}" || tmptxt="${blue}Serial"
+    [ -z "$RFILE" ] && HOTKEYS="$HOTKEYS ${tmptxt}"
     HOTKEYS="$HOTKEYS ${red}F10:Quit${rst} "
     printf "$HOTKEYS"
 
@@ -806,7 +810,7 @@ while true; do
         $RIGHT_KEY)
             switch_tab R;;
         o|O)
-            [ compareFlag -eq 0 ] && compare_certs || clean_compare
+            [ $compareFlag -eq 0 ] && compare_certs || clean_compare
             clear;;
         e|E)
             if [ $TAB == "L" ]; then
