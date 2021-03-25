@@ -2,7 +2,7 @@
 #
 # Java keystore bash manager
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.14
+# Version 1.141
 #
 # Update:
 # cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
@@ -728,9 +728,6 @@ if [ -n "$RFILE" ]; then
 fi
 clear
 
-# Init special keys definition
-init_special_keys
-
 # main loop
 while true; do
     printf '[H'
@@ -860,7 +857,7 @@ while true; do
         t|T)
             [ -n "$SHOW_TYPE" ] && SHOW_TYPE="" || SHOW_TYPE="Y"
             clear;;
-        "$TAB_KEY")
+        $TAB_KEY)
             [ "$TAB" == "L" ] && switch_tab R || switch_tab L;;
         m|M)
             import_from_www
