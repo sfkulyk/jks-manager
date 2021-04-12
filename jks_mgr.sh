@@ -2,7 +2,7 @@
 #
 # Java keystore bash manager
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.141
+# Version 1.142
 #
 # Update:
 # cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
@@ -246,7 +246,7 @@ delete_cert() {
     eval unset ${TAB}certDays[$cnt]
     eval unset ${TAB}flags[$cnt]
     eval unset ${TAB}type[$cnt]
-    [ compareFlag -eq 1 ] && compare_certs
+    [ $compareFlag -eq 1 ] && compare_certs
     delay 2 "Certificate ${blue}$1${rst} succesfully removed from ${blue}$2${rst}"
 }
 
@@ -522,7 +522,7 @@ copy_cert() {
         LcertDays[${counter}]=${RcertDays[${RENTRY}]}
         Ltype[${counter}]=${Rtype[${RENTRY}]}
     fi
-    [ compareFlag -eq 1 ] && compare_certs
+    [ $compareFlag -eq 1 ] && compare_certs
     delay 2 "Certificate ${blue}$1${rst} succesfully copied from ${blue}$2${rst} to ${blue}$4${rst}\n"
 }
 
@@ -566,7 +566,7 @@ import_from_www() {
         else
             init_certs "$RFILE" "$RSTOREPASS" "R"
         fi
-        [ compareFlag -eq 1 ] && compare_certs
+        [ $compareFlag -eq 1 ] && compare_certs
     else
         delay 5 "\n${red}Cancelled.${rst}"
     fi
