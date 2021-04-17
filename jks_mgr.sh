@@ -2,7 +2,7 @@
 #
 # Java keystore bash manager
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.142
+# Version 1.15
 #
 # Update:
 # cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
@@ -15,7 +15,7 @@
 # * Add two-panel mode
 # * Copy certificate (two-panel mode only)
 # * Implemented page heigh and scrolling
-# * cOmpare certificates (two panel mode only, primary key - Serial Number)
+# * comPare certificates (two panel mode only, primary key - Serial Number)
 # * Console help added
 # * Auto screen height adjust
 # * View certificate details
@@ -33,6 +33,7 @@
 # * add inline help (F1)
 # * Add suffixes to certificate entry type CA(clientAuth) / SA(serverAuth)
 # * add underline effect for enabled options
+# * Add sort by Alias Name (up/down), certificate expiration (up/down)
 #
 
 # If you change default password, don't forget to clear it before sharing your file outside
@@ -44,9 +45,9 @@ WARNING_DAYS=60
 CRITICAL_DAYS=20
 
 # Init arrays and other variables
-typeset -A LcertName LcertSerial LcertValid LcertDays Lflags Ltype
+typeset -a LcertName LcertSerial LcertValid LcertDays Lflags Ltype
 typeset -i LcertMax=0 LENTRY=1
-typeset -A RcertName RcertSerial RcertValid RcertDays Rflags Rtype
+typeset -a RcertName RcertSerial RcertValid RcertDays Rflags Rtype
 typeset -i RcertMax=0 RENTRY=1
 typeset -i POSITION=1      # Screen position
 escape_char=$(printf "\u1b") # for keypress navigation
@@ -56,6 +57,7 @@ aliasWidth=12   # default alias width for single mode
 compareFlag=0
 SHOW_SERIAL=""  # OFF by default. Only for single-panel mode
 DEBUG=""        # If not empty, shows keytool/openssl cmds and wait for confirm
+sort_mode="du"  # Default sort mode
 
 # Init colors
 red='[1m[31m'
@@ -92,7 +94,7 @@ help_function() {
     printf "   Browse keystores supported by keytool (JKS, PKCS12)\n"
     printf "   Available actions with certificates and keystores:\n"
     printf "     View details, Rename, Delete, Export to JKS, PKCS12, CER, PEM formats,\n"
-    printf "     Import (directly from web-site)\n"
+    printf "     Sort by alias/expiration, Import (directly from web-site)\n"
     printf "     in two-panel mode also available: Copy, Compare (by cert serial ID)\n"
     printf " ${blue}Usage:${rst}\n"
     printf " ${green}jks_mgr.sh <keystore>${rst}\n"
@@ -122,16 +124,17 @@ inline_help() {
     printf " ${green}F6${rst}/${green}R${rst}: Rename active certificate alias\n"
     printf " ${green}F8${rst}/${green}D${rst}: Delete active certificate\n"
     printf " ${green}F10${rst}/${green}Q${rst}: Quit program\n"
-    printf " ${green}O${rst}: cOmpare certificates. Asterisk will indicate the certificate\n"
-    printf "     if opposite panel contain certificate with the same Serial ID\n"
     printf " ${green}E${rst}: Export certificate to JKS, PKCS12, CRT and PEM formats\n"
     printf " ${green}M${rst}: Import certificate from web-site.\n"
     printf "    You will be asked for DNS and optionally port (default is 443)\n"
     printf "    For example: google.com\n"
     printf "                 google.com:443\n"
+    printf " ${green}O${rst}: change sort order: by Alias or by Expiration up/down. \n"
+    printf " ${green}P${rst}: comPare certificates. Asterisk will indicate the certificate\n"
+    printf "     if opposite panel contain certificate with the same Serial ID\n"
+    printf " ${green}S${rst}: show/hide Serial ID (only for single-panel mode)\n"
     printf " ${green}T${rst}: show/hide certificate entry Type - \n"
     printf "    Show PrivateKeyEntry/TrustedCertEntry + suffixes CA(clientAuth)/SA(serverAuth)\n"
-    printf " ${green}S${rst}: show/hide Serial ID (only for single-panel mode)\n"
     printf "\n run ${green}jks_mgr.sh --help${rst} to see usage help"
     printf "\n Press any key to return"
     read -N1
@@ -188,6 +191,101 @@ adjust_window() {
     fi
 }
 
+sort_certs() {
+    typeset -i ext_cnt int_cnt currDays current
+    case $sort_mode in
+      du) sort_mode="dd";;
+      dd) sort_mode="nu";;
+      nu) sort_mode="nd";;
+      *)  sort_mode="du";;
+    esac
+
+# sort left panel
+    ext_cnt=$LcertMax
+    while [ $ext_cnt -gt 0 ]; do
+      case $sort_mode in
+        du) currDays=-9999;;
+        dd) currDays=9999;;
+        nu) currName="~";;
+        nd) currName="";;
+      esac
+      int_cnt=1
+      current=1
+      while [ $int_cnt -le $LcertMax ]; do
+      case $sort_mode in
+        du) [ -n "${LcertName[$int_cnt]}" ] && [ ${LcertDays[$int_cnt]} -ge $currDays ] && current=$int_cnt && currDays=${LcertDays[$int_cnt]};;
+        dd) [ -n "${LcertName[$int_cnt]}" ] && [ ${LcertDays[$int_cnt]} -le $currDays ] && current=$int_cnt && currDays=${LcertDays[$int_cnt]};;
+        nu) [ -n "${LcertName[$int_cnt]}" ] && [ "${LcertName[$int_cnt]}" \< "$currName" ] && current=$int_cnt && currName=${LcertName[$int_cnt]};;
+        nd) [ -n "${LcertName[$int_cnt]}" ] && [ "${LcertName[$int_cnt]}" \> "$currName" ] && current=$int_cnt && currName=${LcertName[$int_cnt]};;
+      esac
+
+        int_cnt+=1
+      done
+      NewName[$ext_cnt]=${LcertName[$current]}
+      NewSerial[$ext_cnt]=${LcertSerial[$current]}
+      NewValid[$ext_cnt]=${LcertValid[$current]}
+      NewDays[$ext_cnt]=${LcertDays[$current]}
+      NewFlag[$ext_cnt]=${Lflags[$current]}
+      NewType[$ext_cnt]=${Ltype[$current]}
+      LcertName[$current]=""
+      ext_cnt=$(( $ext_cnt-1 ))
+    done
+
+    int_cnt=1
+    while [ $int_cnt -le $LcertMax ]; do
+      LcertName[$int_cnt]=${NewName[$int_cnt]}
+      LcertSerial[$int_cnt]=${NewSerial[$int_cnt]}
+      LcertValid[$int_cnt]=${NewValid[$int_cnt]}
+      LcertDays[$int_cnt]=${NewDays[$int_cnt]}
+      Lflags[$int_cnt]=${NewFlag[$int_cnt]}
+      Ltype[$int_cnt]=${NewType[$int_cnt]}
+      int_cnt=$(( int_cnt + 1 ))
+    done
+
+# sort right panel
+    [ -n "$RFILE" ] || return
+    ext_cnt=$RcertMax
+    while [ $ext_cnt -gt 0 ]; do
+      case $sort_mode in
+        du) currDays=-9999;;
+        dd) currDays=9999;;
+        nu) currName="~";;
+        nd) currName="";;
+      esac
+      int_cnt=1
+      current=1
+      while [ $int_cnt -le $RcertMax ]; do
+      case $sort_mode in
+        du) [ -n "${RcertName[$int_cnt]}" ] && [ ${RcertDays[$int_cnt]} -ge $currDays ] && current=$int_cnt && currDays=${RcertDays[$int_cnt]};;
+        dd) [ -n "${RcertName[$int_cnt]}" ] && [ ${RcertDays[$int_cnt]} -le $currDays ] && current=$int_cnt && currDays=${RcertDays[$int_cnt]};;
+        nu) [ -n "${RcertName[$int_cnt]}" ] && [ "${RcertName[$int_cnt]}" \< "$currName" ] && current=$int_cnt && currName=${RcertName[$int_cnt]};;
+        nd) [ -n "${RcertName[$int_cnt]}" ] && [ "${RcertName[$int_cnt]}" \> "$currName" ] && current=$int_cnt && currName=${RcertName[$int_cnt]};;
+      esac
+
+        int_cnt+=1
+      done
+      NewName[$ext_cnt]=${RcertName[$current]}
+      NewSerial[$ext_cnt]=${RcertSerial[$current]}
+      NewValid[$ext_cnt]=${RcertValid[$current]}
+      NewDays[$ext_cnt]=${RcertDays[$current]}
+      NewFlag[$ext_cnt]=${Rflags[$current]}
+      NewType[$ext_cnt]=${Rtype[$current]}
+      RcertName[$current]=""
+      ext_cnt=$(( $ext_cnt-1 ))
+    done
+
+    int_cnt=1
+    while [ $int_cnt -le $RcertMax ]; do
+      RcertName[$int_cnt]=${NewName[$int_cnt]}
+      RcertSerial[$int_cnt]=${NewSerial[$int_cnt]}
+      RcertValid[$int_cnt]=${NewValid[$int_cnt]}
+      RcertDays[$int_cnt]=${NewDays[$int_cnt]}
+      Rflags[$int_cnt]=${NewFlag[$int_cnt]}
+      Rtype[$int_cnt]=${NewType[$int_cnt]}
+      int_cnt=$(( int_cnt + 1 ))
+    done
+
+}
 # $1: cert alias, $2: store file, $3: store pass
 delete_cert() {
     printf "\nPress ${red}y${rst}/${red}Y${rst} to delete [${green}$1${rst}] from ${green}$2${rst}: "
@@ -320,26 +418,32 @@ print_certs() {
 
     adjust_window
     hdr_alias="Alias"
- 
+    ValidSort=""
+    NameSort=""
+    [ "${sort_mode}" == "du" ] && ValidSort="${green}>${rst}"
+    [ "${sort_mode}" == "dd" ] && ValidSort="${green}<${rst}"
+    [ "${sort_mode}" == "nu" ] && NameSort="${green}>${rst}"
+    [ "${sort_mode}" == "nd" ] && NameSort="${green}<${rst}"
+
     if [ -n "$RFILE" ]; then # two-panel
         [ "${RcertMax}" -gt "${LcertMax}" ] && commonMax=${RcertMax}
         headerWidth=$(( $aliasWidth + 5 ))
         [ -n "$SHOW_TYPE" ] && headerWidth=$(( $headerWidth + 14 ))
         printf " store: ${blue}%-$(( $headerWidth ))s${rst}" "$LFILE"
         printf "| store: ${blue}%-$(( $headerWidth -1 ))s${rst}\n" "$RFILE"
+        printf "%1s%-9s " "${ValidSort}" "Valid to"
+        [ -n "$SHOW_TYPE" ] && printf " %-13s" "Storetype"
+        printf "%1s%-${aliasWidth}s |" "${NameSort}" "${hdr_alias:0:$aliasWidth}"
 
-        printf " %-10s" "Valid to"
+        printf "%1s%-9s " "${ValidSort}" "Valid to"
         [ -n "$SHOW_TYPE" ] && printf " %-13s" "Storetype"
-        printf " %-${aliasWidth}s |" "${hdr_alias:0:$aliasWidth}"
-        printf " %-10s" "Valid to"
-        [ -n "$SHOW_TYPE" ] && printf " %-13s" "Storetype"
-        printf " %-${aliasWidth}s\n" "${hdr_alias:0:$aliasWidth}"
+        printf "%1s%-${aliasWidth}s\n" "${NameSort}" "${hdr_alias:0:$aliasWidth}"
     else # single panel
         printf " store: ${blue}%s${rst}\n" "$LFILE"
-        printf " %-10s" "Valid to"
+        printf "%1s%-9s " "${ValidSort}" "Valid to"
         [ -n "$SHOW_SERIAL" ] && printf " %-39s" "Serial No"
         [ -n "$SHOW_TYPE" ] && printf " %-13s" "Storetype"
-        printf " %s\n" "${hdr_alias:0:$aliasWidth}"
+        printf "%1s%-${aliasWidth}s\n" "${NameSort}" "${hdr_alias:0:$aliasWidth}"
     fi
     read WindowHeight WindowWidth<<<$(stty size)
     delimiter=$((${WindowWidth}-2))
@@ -737,16 +841,17 @@ while true; do
     HOTKEYS="$HOTKEYS ${blue}F1:Help"
     HOTKEYS="$HOTKEYS ${blue}F3:Info"
     [ -n "$RFILE" ] && HOTKEYS="$HOTKEYS ${green}F5:Copy"
-    HOTKEYS="$HOTKEYS ${green}F6:Rename"
-    HOTKEYS="$HOTKEYS ${red}F8:Delete"
+    HOTKEYS="$HOTKEYS ${green}F6:Ren"
+    HOTKEYS="$HOTKEYS ${red}F8:Del"
     HOTKEYS="$HOTKEYS ${green}Export"
     HOTKEYS="$HOTKEYS ${green}iMport"
     [ "${SHOW_TYPE}" == "Y" ] && tmptxt="${uline}${blue}Type${nline}" || tmptxt="${blue}Type"
     HOTKEYS="$HOTKEYS ${tmptxt}"
-    [ $compareFlag -eq 1 ] && tmptxt="${uline}${green}cOmpare${nline}" || tmptxt="${green}cOmpare"
+    [ $compareFlag -eq 1 ] && tmptxt="${uline}${green}comPare${nline}" || tmptxt="${green}comPare"
     [ -n "$RFILE" ] && HOTKEYS="$HOTKEYS ${tmptxt}"
     [ "${SHOW_SERIAL}" == "Y" ] && tmptxt="${uline}${blue}Serial${nline}" || tmptxt="${blue}Serial"
     [ -z "$RFILE" ] && HOTKEYS="$HOTKEYS ${tmptxt}"
+    HOTKEYS="$HOTKEYS ${blue}sOrt${rst}"
     HOTKEYS="$HOTKEYS ${red}F10:Quit${rst} "
     printf "$HOTKEYS"
 
@@ -806,7 +911,7 @@ while true; do
             switch_tab L;;
         $RIGHT_KEY)
             switch_tab R;;
-        o|O)
+        p|P)
             [ $compareFlag -eq 0 ] && compare_certs || clean_compare
             clear;;
         e|E)
@@ -850,6 +955,8 @@ while true; do
             clear;;
         q|Q|$F10_KEY)
             printf "\n${green}Good bye${rst}\n"; exit 0;;
+        o|O)
+            sort_certs; clear;;
         s|S)
             [ -n "$RFILE" ] && continue
             [ -n "$SHOW_SERIAL" ] && SHOW_SERIAL="" || SHOW_SERIAL="Y"
