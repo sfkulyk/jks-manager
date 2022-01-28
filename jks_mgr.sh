@@ -2,7 +2,7 @@
 #
 # Java keystore bash manager
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.15
+# Version 1.16
 #
 # Update:
 # cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
@@ -33,8 +33,9 @@
 # * add inline help (F1)
 # * Add suffixes to certificate entry type CA(clientAuth) / SA(serverAuth)
 # * add underline effect for enabled options
-# * Add sort by Alias Name (up/down), certificate expiration (up/down)
-#
+# * Add sort by Alias Name (up/down), certificate expiration (up/down) v1.15
+# * added import certificate from pem and cer files v1.16
+
 
 # If you change default password, don't forget to clear it before sharing your file outside
 default_store_pwd="changeit"
@@ -630,6 +631,72 @@ copy_cert() {
     delay 2 "Certificate ${blue}$1${rst} succesfully copied from ${blue}$2${rst} to ${blue}$4${rst}\n"
 }
 
+import_cert() {
+    printf "\nPlease choose import source (or empty string to cancel): \n"
+
+    while true; do
+        printf "\n1. ${green}W${rst}eb-site\n2. ${green}P${rst}EM file\n3. ${green}C${rst}ER file\n4. ${red}Q${rst}uit\n\n: "
+        read -rsN1
+        case "$REPLY" in
+            w|W|1) import_from_www
+                         break;;
+            p|P|2) import_from_pem
+                         break;;
+            c|C|3) import_from_pem # .cer and .pem are the same technically
+                         break;;
+            q|Q|4) break;;
+        esac
+    done
+}
+
+import_from_pem() {
+    while true; do
+      printf "\nPlease enter file name (or empty string to cancel): "
+      read PEMFILE
+      if [ -z "$PEMFILE" ]; then
+        delay 3 "\n${red}Cancelled.${rst}"
+        return
+      elif [ -f "$PEMFILE" ]; then
+        break
+      else
+        delay 1 "\n${red}file ${green}$PEMFILE${red} not found, please try again${rst}"
+      fi
+    done
+    PEMINFO=$(openssl x509 -in "$PEMFILE" -text|grep -P "(Issuer:.* \KCN = .*|Not Before:|Not After :|Subject:)")
+    PEMISSUER=$(echo "$PEMINFO"|grep -Po "Issuer:(.* )CN = \K.*")
+    PEMFROM=$(echo "$PEMINFO"|grep -Po "Not Before: \K.*")
+    PEMTO=$(echo "$PEMINFO"|grep -Po "Not After : \K.*")
+    PEMSUBJECT=$(echo "$PEMINFO"|grep -Po "Subject: .* CN = \K.*")
+    printf "\nFound certificate:\n"
+    printf "CN        : ${green}${PEMSUBJECT}${rst}\n"
+    printf "Valid From: ${green}${PEMFROM}${rst}\n"
+    printf "Valid to  : ${green}${PEMTO}${rst}\n"
+    printf "Issuer    : ${green}${PEMISSUER}${rst}\n"
+    printf "\nPlease enter alias (or empty string to use the following ${green}${PEMSUBJECT}${rst}) :"
+    read ALIAS
+    if [ -z "$ALIAS" ]; then
+      ALIAS="$PEMSUBJECT"
+    fi
+    if [ "$TAB" == "L" ]; then
+        storefile=$LFILE
+        storepass=$LSTOREPASS
+    else
+        storefile=$RFILE
+        storepass=$RSTOREPASS
+    fi
+    keytool -import -file "$PEMFILE" -keystore "$storefile" -storepass "$storepass" -noprompt -alias "$ALIAS"
+    if [ $? -ne 0 ]; then
+         delay 5 "${red}Can't add certificate to keystore${rst}\n"
+         return
+    fi
+    delay 2 "${blue}Certificate $ALIAS was imported to $storefile${rst}\n"
+    if [ "$TAB" == "L" ]; then
+        init_certs "$LFILE" "$LSTOREPASS" "L"
+    else
+        init_certs "$RFILE" "$RSTOREPASS" "R"
+    fi
+}
+
 # import certificate from web-site
 import_from_www() {
     printf "\nPlease enter URL without https - [${green}site${rst}] or [${green}site:port${rst}] (or empty string to cancel): "
@@ -670,7 +737,6 @@ import_from_www() {
         else
             init_certs "$RFILE" "$RSTOREPASS" "R"
         fi
-        [ $compareFlag -eq 1 ] && compare_certs
     else
         delay 5 "\n${red}Cancelled.${rst}"
     fi
@@ -967,7 +1033,7 @@ while true; do
         $TAB_KEY)
             [ "$TAB" == "L" ] && switch_tab R || switch_tab L;;
         m|M)
-            import_from_www
+            import_cert
             clear;;
         *)  clear;;
     esac
