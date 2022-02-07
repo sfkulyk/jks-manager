@@ -3,6 +3,8 @@ Author: Sergii Kulyk aka Saboteur
 
 Certificate console panel manager for Linux shell
 
+Video demo is better that just reading the text, so kindly check demo: https://asciinema.org/a/SORBcJ1hndJ9QluGa5FVnoPHl
+
 Requirements:
 	sed, grep and keytool from jdk should be available in PATH
 	It should work fine under bash, ksh, zsh and possibly all posix modern shells
