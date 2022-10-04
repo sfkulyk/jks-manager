@@ -2,7 +2,7 @@
 #
 # Java keystore bash manager
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.16
+# Version 1.17
 #
 # Update:
 # cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
