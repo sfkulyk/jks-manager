@@ -86,17 +86,24 @@ RIGHT_KEY=$'\e[C'
 TAB_KEY=$'\t'
 DEL_KEY=$'\e[3~'
 
+# Checking for mandatory external software
+which keytool>/dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo " ERROR: ${red}keytool${rst} is not found."
+    echo " Please check that your PATH contains path to your \$JAVA_HOME/bin"
+fi
+
 help_function() {
     printf " ${blue}Keystore manager ${CUR_VERSION}\n"
     printf "   ${green}(C) Sergii Kulyk aka Saboteur${rst}\n"
     printf " ${blue}Requirements:${rst}\n"
-    printf "   sed, grep and keytool from jdk should be available in PATH\n"
+    printf "   ${green}sed${rst}, ${green}grep${rst} and ${green}keytool ${rst}from jdk should be available in PATH\n"
     printf " ${blue}Features:${rst}\n"
-    printf "   Browse keystores supported by keytool (JKS, PKCS12)\n"
-    printf "   Available actions with certificates and keystores:\n"
-    printf "     View details, Rename, Delete, Export to JKS, PKCS12, CER, PEM formats,\n"
-    printf "     Sort by alias/expiration, Import (directly from web-site)\n"
-    printf "     in two-panel mode also available: Copy, Compare (by cert serial ID)\n"
+    printf "   Available actions with certificates and keystores (JKS and PKCS12):\n"
+    printf "     View details, Rename, Delete, Export to: JKS/PKCS12/CER/PEM formats,\n"
+    printf "     Sort by alias/expiration\n"
+    printf "     Import (directly from web-site)\n"
+    printf "     Two-panel mode allows to Copy and Compare between keystores\n"
     printf " ${blue}Usage:${rst}\n"
     printf " ${green}jks_mgr.sh <keystore>${rst}\n"
     printf "     open jks mgr in single-panel mode\n"
@@ -131,7 +138,7 @@ inline_help() {
     printf "    For example: google.com\n"
     printf "                 google.com:443\n"
     printf " ${green}O${rst}: change sort order: by Alias or by Expiration up/down. \n"
-    printf " ${green}P${rst}: comPare certificates. Asterisk will indicate the certificate\n"
+    printf " ${green}P${rst}: comPare certificates (by SerialID). Existing in both will be marked with *\n"
     printf "     if opposite panel contain certificate with the same Serial ID\n"
     printf " ${green}S${rst}: show/hide Serial ID (only for single-panel mode)\n"
     printf " ${green}T${rst}: show/hide certificate entry Type - \n"
