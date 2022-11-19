@@ -1,4 +1,4 @@
-Java keystore manager
+JKS manager (keystore manager)
 Author: Sergii Kulyk aka Saboteur
 
 Certificate console panel manager for Linux shell
