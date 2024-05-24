@@ -2,7 +2,7 @@
 #
 # Java keystore bash manager
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.17
+# Version 1.18
 #
 # Update:
 # cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
@@ -21,20 +21,21 @@
 # * View certificate details
 # * Add functional key support (F1, F3, F5, F6, F8, F10)
 # * Auto screen width adjust, certificate alias name can be shortened to fit the screen
-# * Add import certificate from web site
-# * Add colors for certificate expiration (yellow for <60 days, red for <20 days)
-# * Add show/hide serial number column (single-mode only)
-# * Add export to PEM file
-# * Add --update console option. Also added direct github url for manual update
-# * DEBUG feature. Just set variable to non-empty to see and confirm all commands
-# * Add --version console option
-# * Add --help console option to see usage help
+# * import certificate from web site
+# * Colored expiration indication (yellow for <60 days, red for <20 days)
+# * Filter to show/hide serial number column (single-mode only)
+# * export to PEM file
+# * --update console option. Or just download from github manually
+# * DEBUG function. Just for development purposes
+# * --version console option
+# * --help console option to see usage help
 # * show/hide certificate entry type column
-# * add inline help (F1)
+# * inline help (F1)
 # * Add suffixes to certificate entry type CA(clientAuth) / SA(serverAuth)
-# * add underline effect for enabled options
-# * Add sort by Alias Name (up/down), certificate expiration (up/down) v1.15
-# * added import certificate from pem and cer files v1.16
+# * underline effect for active options
+# * v1.15 Now you can sort certificates by Alias Name (up/down), certificate expiration (up/down)
+# * import certificate from pem and cer files v1.16
+# * v1.18 Separate option to export .crt and .key files without bag attributes
 
 
 # If you change default password, don't forget to clear it before sharing your file outside
@@ -150,12 +151,13 @@ inline_help() {
 
 # wait for x seconds or continue on pressing enter
 # $1 seconds, $2 text
-delay() {
+printdelay() {
     printf "$2"
     read -N1 -t $1
 }
 
 debug() {
+    [ -z "$DEBUG" ] && return
     printf "Press any key to execute the following command:\n${green}$1${rst}\n"
     read -N1
 }
@@ -300,14 +302,13 @@ delete_cert() {
     read -N1
     if [ "$REPLY" == y -o "$REPLY" == Y ]; then
         printf "\n${red}Removing certificate [$1]${rst}\n"
-        [ -n "$DEBUG" ] && debug "keytool -delete -alias \"$1\" -keystore \"$2\" -storepass \"$3\""
         keytool -delete -alias "$1" -keystore "$2" -storepass "$3"
         if [ $? -ne 0 ]; then
-            delay 5 "${red}Error deleting $1 from $2${rst}"
+            printdelay 5 "${red}Error deleting $1 from $2${rst}"
             return
         fi
     else
-        delay 5 "\n${red}Cancelled.${rst}"
+        printdelay 5 "\n${red}Cancelled.${rst}"
         return
     fi
 
@@ -353,7 +354,7 @@ delete_cert() {
     eval unset ${TAB}flags[$cnt]
     eval unset ${TAB}type[$cnt]
     [ $compareFlag -eq 1 ] && compare_certs
-    delay 2 "Certificate ${blue}$1${rst} succesfully removed from ${blue}$2${rst}"
+    printdelay 2 "Certificate ${blue}$1${rst} succesfully removed from ${blue}$2${rst}"
 }
 
 # Read certificate information from keystore
@@ -492,11 +493,11 @@ print_certs() {
     done
 }
 
-# $1 Alias $2 store $3 store pass
+# $1 Alias $2 store $3 store pass $4 cert type
 export_cert() {
     ALIASNAME=$(printf "$1"|tr -d '[]()#*?\\/'|tr " " "_")
     while true; do
-        printf "\n1. ${green}J${rst}KS\n2. ${green}P${rst}KCS12\n3. ${green}c${rst}rt\n4. P${green}E${rst}M\n5. ${red}Q${rst}uit\n\nChoose export format for certificate: ${green}$1${rst} from ${green}$2${rst}: "
+	printf "\n1. ${green}J${rst}KS (Java KeyStore file)\n2. ${green}P${rst}KCS12 separate file\n3. ${green}c${rst}rt format\n4. P${green}E${rst}M\n5. ${green}S${rst}eparate .crt and .key files\n0. ${red}Q${rst}uit\n\nChoose export format for certificate: ${green}$1${rst} from ${green}$2${rst}: "
         read -rsN1
         case $REPLY in
             j|J|1) FILENAME="${ALIASNAME}.jks"
@@ -507,12 +508,11 @@ export_cert() {
                          printf "\nProvide password for $FILENAME (press ENTER to use: ${green}${DESTPASS}${rst}) :"
                          read
                          [ -n "$REPLY" ] && DESTPASS="$REPLY"
-                         [ -n "$DEBUG" ] && debug "keytool -importkeystore -srckeystore \"$2\" -destkeystore \"${FILENAME}\" -srcalias \"$1\" -destalias \"$1\" -srcstorepass \"$3\" -deststorepass \"$DESTPASS\" -deststoretype jks"
                          keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$DESTPASS" -deststoretype jks
                          if [ $? -eq 0 ]; then
-                             delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
+                             printdelay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
                          else
-                             delay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
+                             printdelay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
                          fi
                          break;;
             p|P|2) FILENAME="${ALIASNAME}.pkcs12"
@@ -523,45 +523,70 @@ export_cert() {
                          printf "\nProvide password for $FILENAME (press ENTER to use: ${green}${DESTPASS}${rst}) :"
                          read
                          [ -n "$REPLY" ] && DESTPASS="$REPLY"
-                         [ -n "$DEBUG" ] && debug "keytool -importkeystore -srckeystore \"$2\" -destkeystore \"${FILENAME}\" -srcalias \"$1\" -destalias \"$1\" -srcstorepass \"$3\" -deststorepass \"$DESTPASS\" -deststoretype pkcs12"
                          keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$DESTPASS" -deststoretype pkcs12
                          if [ $? -eq 0 ]; then
-                             delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
+                             printdelay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
                          else
-                             delay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
+                             printdelay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
                          fi
                          break;;
             c|C|3) FILENAME="${ALIASNAME}.cer"
                          printf "\nProvide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
                          read
-                         [ -n "$DEBUG" ] && debug "keytool -exportcert -v -alias \"$1\" -keystore \"$2\" -storepass \"$3\" -rfc -file \"${FILENAME}\""
+			 [ -n "$REPLY" ] && FILENAME="$REPLY"
                          keytool -exportcert -v -alias "$1" -keystore "$2" -storepass "$3" -rfc -file "${FILENAME}"
                          if [ $? -eq 0 ]; then
-                             delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
+                             printdelay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
                          else
-                             delay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
+                             printdelay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
                          fi
                          break;;
             e|E|4) FILENAME="${ALIASNAME}.pem"
                          printf "\nProvide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
                          read
+			 [ -n "$REPLY" ] && FILENAME="$REPLY"
                          [ -f pck12.tmp ] && rm -rf pck12.tmp
-                         [ -n "$DEBUG" ] && debug "keytool -importkeystore -srckeystore \"$2\" -destkeystore pck12.tmp -srcalias \"$1\" -destalias \"$1\" -srcstorepass \"$3\" -deststorepass \"$3\" -deststoretype pkcs12"
                          keytool -importkeystore -srckeystore "$2" -destkeystore pck12.tmp -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$3" -deststoretype pkcs12
                          if [ $? -eq 0 ]; then
-                             [ -n "$DEBUG" ] && debug "openssl pkcs12 -in pck12.tmp -passin \"pass:$3\" -out \"$FILENAME\""
                              openssl pkcs12 -in pck12.tmp -passin "pass:$3" -out "$FILENAME"
                              if [ $? -eq 0 ]; then
-                                 delay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
+                                 printdelay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
                              else
-                                 delay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
+                                 printdelay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
                              fi
                          else
-                             delay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
+                             printdelay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
                          fi
                          [ -f pck12.tmp ] && rm -rf pck12.tmp
                          break;;
-            q|Q|5) break;;
+            s|S|5) FILENAME="${ALIASNAME}"
+		        if [ "${4:0:7}" != "Private" ]; then
+			  printdelay 5 "\n${red}This is trusted certificate, it doesn't have key. Cancelled${rst}\n"
+			  break
+			fi
+		        printf "\nProvide export file basename (press Enter to use: ${green}${FILENAME}${rst}) :"
+			read
+			[ -n "$REPLY" ] && FILENAME="$REPLY"
+			[ -f pck12.tmp ] && rm -rf pck12.tmp
+                        keytool -importkeystore -srckeystore "$2" -destkeystore pck12.tmp -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$3" -deststoretype pkcs12 2>/dev/null
+			if [ $? -eq 0 ]; then
+			  openssl pkcs12 -in pck12.tmp -passin "pass:$3" -out ${FILENAME}.crt -clcerts -nokeys 2>/dev/null | sed -n '/-----BEGIN/,/-----END/p'
+			  result1=$?
+			  openssl pkcs12 -in pck12.tmp -passin "pass:$3" -out ${FILENAME}.key -nocerts -nodes 2>/dev/null | sed -n '/-----BEGIN/,/-----END/p'
+			  result2=$?
+			  if [ $result1 -eq 0 ] && [ $result2 -eq 0 ]; then
+			    printf "\nCertificate and private key have been successfully exported to:\n${green}"
+			    ls -1 ${FILENAME}*
+			    printdelay 5 "${rst}\n"
+			  else
+		            printdelay 5 "\n${red}ERROR: Unable to extract certificate and key${rst}\n"
+			  fi
+			else
+			  printdelay 5 "\n${red}ERROR: Unable to extract certificate from store${rst}\n"
+			fi
+			[ -f pck12.tmp ] && rm -rf pck12.tmp
+                        break;;
+            q|Q|0) break;;
         esac
     done
 }
@@ -591,14 +616,13 @@ copy_cert() {
     read -N1
     if [ "$REPLY" == y -o "$REPLY" == Y ]; then
         printf "\n${blue}Copying certificate [$1]${rst}\n"
-        [ -n "$DEBUG" ] && debug "keytool -importkeystore -srckeystore \"$2\" -destkeystore \"$4\" -srcalias \"$1\" -destalias \"$1\" -srcstorepass \"$3\" -deststorepass \"$5\""
         keytool -importkeystore -srckeystore "$2" -destkeystore "$4" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$5"
         if [ $? -ne 0 ]; then
-            delay 5 "${red}Error copying $1 from $2${rst}\n"
+            printdelay 5 "${red}Error copying $1 from $2${rst}\n"
             return
         fi
     else
-        delay 5 "\n${red}Cancelled.${rst}\n"
+        printdelay 5 "\n${red}Cancelled.${rst}\n"
         return
     fi
 
@@ -635,7 +659,7 @@ copy_cert() {
         Ltype[${counter}]=${Rtype[${RENTRY}]}
     fi
     [ $compareFlag -eq 1 ] && compare_certs
-    delay 2 "Certificate ${blue}$1${rst} succesfully copied from ${blue}$2${rst} to ${blue}$4${rst}\n"
+    printdelay 2 "Certificate ${blue}$1${rst} succesfully copied from ${blue}$2${rst} to ${blue}$4${rst}\n"
 }
 
 import_cert() {
@@ -661,12 +685,12 @@ import_from_pem() {
       printf "\nPlease enter file name (or empty string to cancel): "
       read PEMFILE
       if [ -z "$PEMFILE" ]; then
-        delay 3 "\n${red}Cancelled.${rst}"
+        printdelay 3 "\n${red}Cancelled.${rst}"
         return
       elif [ -f "$PEMFILE" ]; then
         break
       else
-        delay 1 "\n${red}file ${green}$PEMFILE${red} not found, please try again${rst}"
+        printdelay 1 "\n${red}file ${green}$PEMFILE${red} not found, please try again${rst}"
       fi
     done
     PEMINFO=$(openssl x509 -in "$PEMFILE" -text|grep -P "(Issuer:.* \KCN = .*|Not Before:|Not After :|Subject:)")
@@ -693,10 +717,10 @@ import_from_pem() {
     fi
     keytool -import -file "$PEMFILE" -keystore "$storefile" -storepass "$storepass" -noprompt -alias "$ALIAS"
     if [ $? -ne 0 ]; then
-         delay 5 "${red}Can't add certificate to keystore${rst}\n"
+         printdelay 5 "${red}Can't add certificate to keystore${rst}\n"
          return
     fi
-    delay 2 "${blue}Certificate $ALIAS was imported to $storefile${rst}\n"
+    printdelay 2 "${blue}Certificate $ALIAS was imported to $storefile${rst}\n"
     if [ "$TAB" == "L" ]; then
         init_certs "$LFILE" "$LSTOREPASS" "L"
     else
@@ -717,10 +741,9 @@ import_from_www() {
             PORT="443"
         fi
         printf "\n${blue}Getting certificate from [$SITE:$PORT]${rst}\n"
-        [ -n "$DEBUG" ] && debug "openssl s_client -showcerts -connect \"$SITE:$PORT\" </dev/null 2>/dev/null|openssl x509 -outform PEM >temp.pem"
         openssl s_client -showcerts -connect "$SITE:$PORT" </dev/null 2>/dev/null|openssl x509 -outform PEM >temp.pem
         if [ $? -ne 0 ]; then
-            delay 5 "${red}Unable to download certificate from $SITE:$PORT${rst}\n"
+            printdelay 5 "${red}Unable to download certificate from $SITE:$PORT${rst}\n"
             rm temp.pem
             return
         fi
@@ -731,21 +754,20 @@ import_from_www() {
             storefile=$RFILE
             storepass=$RSTOREPASS
         fi
-        [ -n "$DEBUG" ] && debug "keytool -import -file temp.pem -keystore \"$storefile\" -storepass \"$storepass\" -noprompt -alias \"$SITE\""
         keytool -import -file temp.pem -keystore "$storefile" -storepass "$storepass" -noprompt -alias "$SITE"
         if [ $? -ne 0 ]; then
-            delay 5 "${red}Can't add certificate to keystore${rst}\n"
+            printdelay 5 "${red}Can't add certificate to keystore${rst}\n"
             rm temp.pem
             return
         fi
-        delay 2 "${blue}Certificate $SITE was imported to $storefile${rst}\n"
+        printdelay 2 "${blue}Certificate $SITE was imported to $storefile${rst}\n"
         if [ "$TAB" == "L" ]; then
             init_certs "$LFILE" "$LSTOREPASS" "L"
         else
             init_certs "$RFILE" "$RSTOREPASS" "R"
         fi
     else
-        delay 5 "\n${red}Cancelled.${rst}"
+        printdelay 5 "\n${red}Cancelled.${rst}"
     fi
 }
 
@@ -754,33 +776,30 @@ rename_cert() {
     printf "\nProvide new name for ${blue}$1${rst}: "
     read newAlias
     if [ -z "$newAlias" ]; then
-        delay 5 "\n${red}Cancelled.${rst}"
+        printdelay 5 "\n${red}Cancelled.${rst}"
         return
     fi
     printf "\nPress ${red}y${rst}/${red}Y${rst} to rename ${green}$1${rst} from ${green}$2${rst} to ${green}${newAlias}${rst}: "
     read -N1
     if [ "$REPLY" == y -o "$REPLY" == Y ]; then
         printf "\n${blue}Renaming certificate [$1]${rst}\n"
-        [ -n "$DEBUG" ] && debug "keytool -importkeystore -srckeystore \"$2\" -destkeystore \"tmp.jks\" -srcalias \"$1\" -destalias \"$newAlias\" -srcstorepass \"$3\" -deststorepass \"$3\""
         keytool -importkeystore -srckeystore "$2" -destkeystore "tmp.jks" -srcalias "$1" -destalias "$newAlias" -srcstorepass "$3" -deststorepass "$3"
         if [ $? -ne 0 ]; then
-            delay 5 "${red}Error renaming certificate $1 from $2${rst}"
+            printdelay 5 "${red}Error renaming certificate $1 from $2${rst}"
             return
         fi
-        [ -n "$DEBUG" ] && debug "keytool -importkeystore -srckeystore \"tmp.jks\" -destkeystore \"$2\" -srcalias \"$newAlias\" -destalias \"$newAlias\" -srcstorepass \"$3\" -deststorepass \"$3\""
         keytool -importkeystore -srckeystore "tmp.jks" -destkeystore "$2" -srcalias "$newAlias" -destalias "$newAlias" -srcstorepass "$3" -deststorepass "$3"
         if [ $? -ne 0 ]; then
-            delay 5 "${red}Error renaming certificate $1 from $2${rst}"
+            printdelay 5 "${red}Error renaming certificate $1 from $2${rst}"
             return
         fi
-        [ -n "$DEBUG" ] && debug "keytool -delete -alias \"$1\" -keystore \"$2\" -storepass \"$3\""
         keytool -delete -alias "$1" -keystore "$2" -storepass "$3"
         if [ $? -ne 0 ]; then
-            delay 5 "${red}Error renaming certificate $1 from $2${rst}"
+            printdelay 5 "${red}Error renaming certificate $1 from $2${rst}"
             return
         fi
     else
-        delay 5 "\n${red}Cancelled.${rst}"
+        printdelay 5 "\n${red}Cancelled.${rst}"
         return
     fi
     rm tmp.jks
@@ -789,7 +808,7 @@ rename_cert() {
     else
         RcertName[$RENTRY]="$newAlias"
     fi
-    delay 2 "Certificate ${blue}$1${rst} succesfully renamed to ${blue}${newAlias}${rst}"
+    printdelay 2 "Certificate ${blue}$1${rst} succesfully renamed to ${blue}${newAlias}${rst}"
 }
 
 # $1 tab (L or R)
@@ -854,7 +873,6 @@ clean_compare() {
 
 # Parsing arguments
 if [ -n "$1" -a "$1" == "--update" ]; then
-    [ -n "$DEBUG" ] && debug "trying to update $0"
     printf "${green}Checking for new version of jks manager${rst}\n"
     printf "Current version: ${blue}${CUR_VERSION}${rst}\n"
     NEW_VERSION="$(curl -k -s https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh|grep -oP '^# Version \K.*')"
@@ -989,9 +1007,9 @@ while true; do
             clear;;
         e|E)
             if [ $TAB == "L" ]; then
-                export_cert "${LcertName[$LENTRY]}" "$LFILE" "$LSTOREPASS"
+                export_cert "${LcertName[$LENTRY]}" "$LFILE" "$LSTOREPASS" "${Ltype[$LENTRY]}"
             else
-                export_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS"
+                export_cert "${RcertName[$RENTRY]}" "$RFILE" "$RSTOREPASS" "${Rtype[$RENTRY]}"
             fi
             clear;;
         h|H|$F1_KEY )
