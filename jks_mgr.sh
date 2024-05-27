@@ -2,7 +2,7 @@
 #
 # Java keystore bash manager
 # Author: Sergii Kulyk aka Saboteur
-# Version 1.18
+# Version 1.19
 #
 # Update:
 # cp jks_mgr.sh jks_mgr.sh.old && curl -k https://raw.githubusercontent.com/sfkulyk/jks-manager/master/jks_mgr.sh > jks_mgr.sh
@@ -36,7 +36,8 @@
 # * v1.15 Now you can sort certificates by Alias Name (up/down), certificate expiration (up/down)
 # * import certificate from pem and cer files v1.16
 # * v1.18 Separate option to export .crt and .key files without bag attributes
-
+# * v1.19 Separate option to export certificate and key in kubernetes/openshift yaml format for routes
+#
 
 # If you change default password, don't forget to clear it before sharing your file outside
 default_store_pwd="changeit"
@@ -497,7 +498,7 @@ print_certs() {
 export_cert() {
     ALIASNAME=$(printf "$1"|tr -d '[]()#*?\\/'|tr " " "_")
     while true; do
-	printf "\n1. ${green}J${rst}KS (Java KeyStore file)\n2. ${green}P${rst}KCS12 separate file\n3. ${green}c${rst}rt format\n4. P${green}E${rst}M\n5. ${green}S${rst}eparate .crt and .key files\n0. ${red}Q${rst}uit\n\nChoose export format for certificate: ${green}$1${rst} from ${green}$2${rst}: "
+	printf "\n1. ${green}J${rst}KS (Java KeyStore file)\n2. ${green}P${rst}KCS12 separate file\n3. ${green}c${rst}rt format\n4. P${green}E${rst}M\n5. ${green}S${rst}eparate .crt and .key files\n6. ${green}K${rst}ubernetes yaml for route\n0. ${red}Q${rst}uit\n\nChoose export format for certificate: ${green}$1${rst} from ${green}$2${rst}: "
         read -rsN1
         case $REPLY in
             j|J|1) FILENAME="${ALIASNAME}.jks"
@@ -585,6 +586,37 @@ export_cert() {
 			  printdelay 5 "\n${red}ERROR: Unable to extract certificate from store${rst}\n"
 			fi
 			[ -f pck12.tmp ] && rm -rf pck12.tmp
+                        break;;
+            k|K|6) FILENAME="${ALIASNAME}"
+		        printf "\nProvide export file name (press Enter to use: ${green}${FILENAME}.txt${rst}) :"
+			read
+			[ -n "$REPLY" ] && FILENAME="$REPLY"
+			[ -f pck12.tmp ] && rm -rf pck12.tmp
+                        keytool -importkeystore -srckeystore "$2" -destkeystore pck12.tmp -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$3" -deststoretype pkcs12 2>/dev/null
+			if [ $? -eq 0 ]; then
+			  openssl pkcs12 -in pck12.tmp -passin "pass:$3" -out ${FILENAME}.txt -nodes
+			  result1=$?
+			  if [ $result1 -eq 0 ]; then
+                            if [ "${4:0:7}" == "Private" ]; then
+                              sed -rn "/BEGIN PRIVATE KEY/,/END PRIVATE KEY/{s/^/      /;p};0,/END CERTIFICATE/{/BEGIN CERTIFICATE/,/END CERTIFICATE/{s/^/      /;p}}" ${FILENAME}.txt > ${FILENAME}.yaml
+                              sed -i "/BEGIN PRIVATE KEY/i\ \ \ \ key: |-" ${FILENAME}.yaml
+                              sed -i "/BEGIN CERTIFICATE/i\ \ \ \ certificate: |-" ${FILENAME}.yaml
+			      printf "\nCertificate and private key have been successfully exported in yaml to:\n${green}"
+                            else
+                              sed -rn "0,/END CERTIFICATE/{/BEGIN CERTIFICATE/,/END CERTIFICATE/{s/^/      /;p}}" ${FILENAME}.txt > ${FILENAME}.yaml
+                              sed -i "/BEGIN CERTIFICATE/i\ \ \ \ certificate: |-" ${FILENAME}.yaml
+			      printf "\nCertificate have been successfully exported in yaml to:\n${green}"
+                            fi
+			      ls -1 ${FILENAME}.txt
+			      printdelay 5 "${rst}\n"
+			  else
+		            printdelay 5 "\n${red}ERROR: Unable to extract certificate and key${rst}\n"
+			  fi
+			else
+			  printdelay 5 "\n${red}ERROR: Unable to extract certificate from store${rst}\n"
+			fi
+			[ -f pck12.tmp ] && rm -rf pck12.tmp
+			[ -f ${FILENAME}.txt ] && rm -rf ${FILENAME}.txt
                         break;;
             q|Q|0) break;;
         esac
