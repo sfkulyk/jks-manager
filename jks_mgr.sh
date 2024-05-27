@@ -324,8 +324,8 @@ delete_cert() {
                 LcertSerial[$cnt]=${LcertSerial[$next]}
                 LcertValid[$cnt]=${LcertValid[$next]}
                 LcertDays[$cnt]=${LcertDays[$next]}
-		Lflags[$cnt]=${Lflags[$next]}
-		Ltype[$cnt]=${Ltype[$next]}
+                Lflags[$cnt]=${Lflags[$next]}
+                Ltype[$cnt]=${Ltype[$next]}
             fi
             cnt+=1; next+=1
         done
@@ -481,7 +481,7 @@ print_certs() {
             printf " |%1s${rcolor}%10s${rst}${rcolor}" "${Rflags[$cnt]}" "${RcertValid[$cnt]}"
             [ -n "$SHOW_TYPE" ] && printf " %-13s" ${Rtype[$cnt]}
             printf " %-${aliasWidth}s${rst}" "${RcertName[$cnt]:0:$aliasWidth}"
-            printf "\n"     
+            printf "\n"
 
         else # single panel
             [ $cnt -eq $LENTRY ] && lcolor="${blueb}" || lcolor=""
@@ -498,126 +498,126 @@ print_certs() {
 export_cert() {
     ALIASNAME=$(printf "$1"|tr -d '[]()#*?\\/'|tr " " "_")
     while true; do
-	printf "\n1. ${green}J${rst}KS (Java KeyStore file)\n2. ${green}P${rst}KCS12 separate file\n3. ${green}c${rst}rt format\n4. P${green}E${rst}M\n5. ${green}S${rst}eparate .crt and .key files\n6. ${green}K${rst}ubernetes yaml for route\n0. ${red}Q${rst}uit\n\nChoose export format for certificate: ${green}$1${rst} from ${green}$2${rst}: "
+        printf "\n1. ${green}J${rst}KS (Java KeyStore file)\n2. ${green}P${rst}KCS12 separate file\n3. ${green}c${rst}rt format\n4. P${green}E${rst}M\n5. ${green}S${rst}eparate .crt and .key files\n6. ${green}K${rst}ubernetes yaml for route\n0. ${red}Q${rst}uit\n\nChoose export format for certificate: ${green}$1${rst} from ${green}$2${rst}: "
         read -rsN1
         case $REPLY in
             j|J|1) FILENAME="${ALIASNAME}.jks"
-                         printf "\nProvide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
-                         read
-                         [ -n "$REPLY" ] && FILENAME="$REPLY"
-                         DESTPASS="${default_store_pwd}"
-                         printf "\nProvide password for $FILENAME (press ENTER to use: ${green}${DESTPASS}${rst}) :"
-                         read
-                         [ -n "$REPLY" ] && DESTPASS="$REPLY"
-                         keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$DESTPASS" -deststoretype jks
-                         if [ $? -eq 0 ]; then
-                             printdelay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
-                         else
-                             printdelay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
-                         fi
-                         break;;
+                printf "\nProvide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
+                read
+                [ -n "$REPLY" ] && FILENAME="$REPLY"
+                DESTPASS="${default_store_pwd}"
+                printf "\nProvide password for $FILENAME (press ENTER to use: ${green}${DESTPASS}${rst}) :"
+                read
+                [ -n "$REPLY" ] && DESTPASS="$REPLY"
+                keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$DESTPASS" -deststoretype jks
+                if [ $? -eq 0 ]; then
+                    printdelay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
+                else
+                    printdelay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
+                fi
+                break;;
             p|P|2) FILENAME="${ALIASNAME}.pkcs12"
-                         printf "\nProvide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
-                         read
-                         [ -n "$REPLY" ] && FILENAME="$REPLY"
-                         DESTPASS="${default_store_pwd}"
-                         printf "\nProvide password for $FILENAME (press ENTER to use: ${green}${DESTPASS}${rst}) :"
-                         read
-                         [ -n "$REPLY" ] && DESTPASS="$REPLY"
-                         keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$DESTPASS" -deststoretype pkcs12
-                         if [ $? -eq 0 ]; then
-                             printdelay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
-                         else
-                             printdelay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
-                         fi
-                         break;;
+                printf "\nProvide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
+                read
+                [ -n "$REPLY" ] && FILENAME="$REPLY"
+                DESTPASS="${default_store_pwd}"
+                printf "\nProvide password for $FILENAME (press ENTER to use: ${green}${DESTPASS}${rst}) :"
+                read
+                [ -n "$REPLY" ] && DESTPASS="$REPLY"
+                keytool -importkeystore -srckeystore "$2" -destkeystore "${FILENAME}" -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$DESTPASS" -deststoretype pkcs12
+                if [ $? -eq 0 ]; then
+                    printdelay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
+                else
+                    printdelay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
+                fi
+                break;;
             c|C|3) FILENAME="${ALIASNAME}.cer"
-                         printf "\nProvide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
-                         read
-			 [ -n "$REPLY" ] && FILENAME="$REPLY"
-                         keytool -exportcert -v -alias "$1" -keystore "$2" -storepass "$3" -rfc -file "${FILENAME}"
-                         if [ $? -eq 0 ]; then
-                             printdelay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
-                         else
-                             printdelay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
-                         fi
-                         break;;
+                printf "\nProvide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
+                read
+                [ -n "$REPLY" ] && FILENAME="$REPLY"
+                keytool -exportcert -v -alias "$1" -keystore "$2" -storepass "$3" -rfc -file "${FILENAME}"
+                if [ $? -eq 0 ]; then
+                    printdelay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
+                else
+                    printdelay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
+                fi
+                break;;
             e|E|4) FILENAME="${ALIASNAME}.pem"
-                         printf "\nProvide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
-                         read
-			 [ -n "$REPLY" ] && FILENAME="$REPLY"
-                         [ -f pck12.tmp ] && rm -rf pck12.tmp
-                         keytool -importkeystore -srckeystore "$2" -destkeystore pck12.tmp -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$3" -deststoretype pkcs12
-                         if [ $? -eq 0 ]; then
-                             openssl pkcs12 -in pck12.tmp -passin "pass:$3" -out "$FILENAME"
-                             if [ $? -eq 0 ]; then
-                                 printdelay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
-                             else
-                                 printdelay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
-                             fi
-                         else
-                             printdelay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
-                         fi
-                         [ -f pck12.tmp ] && rm -rf pck12.tmp
-                         break;;
+                printf "\nProvide export file name (press ENTER to use: ${green}${FILENAME}${rst}) :"
+                read
+                [ -n "$REPLY" ] && FILENAME="$REPLY"
+                [ -f pck12.tmp ] && rm -rf pck12.tmp
+                keytool -importkeystore -srckeystore "$2" -destkeystore pck12.tmp -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$3" -deststoretype pkcs12
+                if [ $? -eq 0 ]; then
+                    openssl pkcs12 -in pck12.tmp -passin "pass:$3" -out "$FILENAME"
+                    if [ $? -eq 0 ]; then
+                        printdelay 2 "Certificate ${blue}$1${rst} is succesfully exported to ${blue}${FILENAME}${rst}\n"
+                    else
+                        printdelay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
+                    fi
+                else
+                    printdelay 5 "${red}Error with exporting $1 to ${FILENAME}${rst}\n"
+                fi
+                [ -f pck12.tmp ] && rm -rf pck12.tmp
+                break;;
             s|S|5) FILENAME="${ALIASNAME}"
-		        if [ "${4:0:7}" != "Private" ]; then
-			  printdelay 5 "\n${red}This is trusted certificate, it doesn't have key. Cancelled${rst}\n"
-			  break
-			fi
-		        printf "\nProvide export file basename (press Enter to use: ${green}${FILENAME}${rst}) :"
-			read
-			[ -n "$REPLY" ] && FILENAME="$REPLY"
-			[ -f pck12.tmp ] && rm -rf pck12.tmp
-                        keytool -importkeystore -srckeystore "$2" -destkeystore pck12.tmp -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$3" -deststoretype pkcs12 2>/dev/null
-			if [ $? -eq 0 ]; then
-			  openssl pkcs12 -in pck12.tmp -passin "pass:$3" -out ${FILENAME}.crt -clcerts -nokeys 2>/dev/null | sed -n '/-----BEGIN/,/-----END/p'
-			  result1=$?
-			  openssl pkcs12 -in pck12.tmp -passin "pass:$3" -out ${FILENAME}.key -nocerts -nodes 2>/dev/null | sed -n '/-----BEGIN/,/-----END/p'
-			  result2=$?
-			  if [ $result1 -eq 0 ] && [ $result2 -eq 0 ]; then
-			    printf "\nCertificate and private key have been successfully exported to:\n${green}"
-			    ls -1 ${FILENAME}*
-			    printdelay 5 "${rst}\n"
-			  else
-		            printdelay 5 "\n${red}ERROR: Unable to extract certificate and key${rst}\n"
-			  fi
-			else
-			  printdelay 5 "\n${red}ERROR: Unable to extract certificate from store${rst}\n"
-			fi
-			[ -f pck12.tmp ] && rm -rf pck12.tmp
-                        break;;
+                if [ "${4:0:7}" != "Private" ]; then
+                    printdelay 5 "\n${red}This is trusted certificate, it doesn't have key. Cancelled${rst}\n"
+                    break
+                fi
+                printf "\nProvide export file basename (press Enter to use: ${green}${FILENAME}${rst}) :"
+                read
+                [ -n "$REPLY" ] && FILENAME="$REPLY"
+                [ -f pck12.tmp ] && rm -rf pck12.tmp
+                keytool -importkeystore -srckeystore "$2" -destkeystore pck12.tmp -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$3" -deststoretype pkcs12 2>/dev/null
+                if [ $? -eq 0 ]; then
+                    openssl pkcs12 -in pck12.tmp -passin "pass:$3" -out ${FILENAME}.crt -clcerts -nokeys 2>/dev/null | sed -n '/-----BEGIN/,/-----END/p'
+                    result1=$?
+                    openssl pkcs12 -in pck12.tmp -passin "pass:$3" -out ${FILENAME}.key -nocerts -nodes 2>/dev/null | sed -n '/-----BEGIN/,/-----END/p'
+                    result2=$?
+                    if [ $result1 -eq 0 ] && [ $result2 -eq 0 ]; then
+                        printf "\nCertificate and private key have been successfully exported to:\n${green}"
+                        ls -1 ${FILENAME}*
+                        printdelay 5 "${rst}\n"
+                    else
+                        printdelay 5 "\n${red}ERROR: Unable to extract certificate and key${rst}\n"
+                    fi
+                else
+                    printdelay 5 "\n${red}ERROR: Unable to extract certificate from store${rst}\n"
+                fi
+                [ -f pck12.tmp ] && rm -rf pck12.tmp
+                break;;
             k|K|6) FILENAME="${ALIASNAME}"
-		        printf "\nProvide export file name (press Enter to use: ${green}${FILENAME}.txt${rst}) :"
-			read
-			[ -n "$REPLY" ] && FILENAME="$REPLY"
-			[ -f pck12.tmp ] && rm -rf pck12.tmp
-                        keytool -importkeystore -srckeystore "$2" -destkeystore pck12.tmp -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$3" -deststoretype pkcs12 2>/dev/null
-			if [ $? -eq 0 ]; then
-			  openssl pkcs12 -in pck12.tmp -passin "pass:$3" -out ${FILENAME}.txt -nodes
-			  result1=$?
-			  if [ $result1 -eq 0 ]; then
-                            if [ "${4:0:7}" == "Private" ]; then
-                              sed -rn "/BEGIN PRIVATE KEY/,/END PRIVATE KEY/{s/^/      /;p};0,/END CERTIFICATE/{/BEGIN CERTIFICATE/,/END CERTIFICATE/{s/^/      /;p}}" ${FILENAME}.txt > ${FILENAME}.yaml
-                              sed -i "/BEGIN PRIVATE KEY/i\ \ \ \ key: |-" ${FILENAME}.yaml
-                              sed -i "/BEGIN CERTIFICATE/i\ \ \ \ certificate: |-" ${FILENAME}.yaml
-			      printf "\nCertificate and private key have been successfully exported in yaml to:\n${green}"
-                            else
-                              sed -rn "0,/END CERTIFICATE/{/BEGIN CERTIFICATE/,/END CERTIFICATE/{s/^/      /;p}}" ${FILENAME}.txt > ${FILENAME}.yaml
-                              sed -i "/BEGIN CERTIFICATE/i\ \ \ \ certificate: |-" ${FILENAME}.yaml
-			      printf "\nCertificate have been successfully exported in yaml to:\n${green}"
-                            fi
-			      ls -1 ${FILENAME}.txt
-			      printdelay 5 "${rst}\n"
-			  else
-		            printdelay 5 "\n${red}ERROR: Unable to extract certificate and key${rst}\n"
-			  fi
-			else
-			  printdelay 5 "\n${red}ERROR: Unable to extract certificate from store${rst}\n"
-			fi
-			[ -f pck12.tmp ] && rm -rf pck12.tmp
-			[ -f ${FILENAME}.txt ] && rm -rf ${FILENAME}.txt
-                        break;;
+                printf "\nProvide export file name (press Enter to use: ${green}${FILENAME}.txt${rst}) :"
+                read
+                [ -n "$REPLY" ] && FILENAME="$REPLY"
+                [ -f pck12.tmp ] && rm -rf pck12.tmp
+                keytool -importkeystore -srckeystore "$2" -destkeystore pck12.tmp -srcalias "$1" -destalias "$1" -srcstorepass "$3" -deststorepass "$3" -deststoretype pkcs12 2>/dev/null
+                if [ $? -eq 0 ]; then
+                    openssl pkcs12 -in pck12.tmp -passin "pass:$3" -out ${FILENAME}.txt -nodes
+                    result1=$?
+                    if [ $result1 -eq 0 ]; then
+                        if [ "${4:0:7}" == "Private" ]; then
+                            sed -rn "/BEGIN PRIVATE KEY/,/END PRIVATE KEY/{s/^/      /;p};0,/END CERTIFICATE/{/BEGIN CERTIFICATE/,/END CERTIFICATE/{s/^/      /;p}}" ${FILENAME}.txt > ${FILENAME}.yaml
+                            sed -i "/BEGIN PRIVATE KEY/i\ \ \ \ key: |-" ${FILENAME}.yaml
+                            sed -i "/BEGIN CERTIFICATE/i\ \ \ \ certificate: |-" ${FILENAME}.yaml
+                            printf "\nCertificate and private key have been successfully exported in yaml to:\n${green}"
+                        else
+                            sed -rn "0,/END CERTIFICATE/{/BEGIN CERTIFICATE/,/END CERTIFICATE/{s/^/      /;p}}" ${FILENAME}.txt > ${FILENAME}.yaml
+                            sed -i "/BEGIN CERTIFICATE/i\ \ \ \ certificate: |-" ${FILENAME}.yaml
+                            printf "\nCertificate have been successfully exported in yaml to:\n${green}"
+                        fi
+                        ls -1 ${FILENAME}.yaml
+                        printdelay 5 "${rst}\n"
+                    else
+                        printdelay 5 "\n${red}ERROR: Unable to extract certificate or key${rst}\n"
+                    fi
+                else
+                    printdelay 5 "\n${red}ERROR: Unable to extract certificate from store${rst}\n"
+                fi
+                [ -f pck12.tmp ] && rm -rf pck12.tmp
+                [ -f ${FILENAME}.txt ] && rm -rf ${FILENAME}.txt
+                break;;
             q|Q|0) break;;
         esac
     done
@@ -959,7 +959,7 @@ clear
 while true; do
     printf '[H'
     print_certs
-    
+
     HOTKEYS="\n"
     HOTKEYS="$HOTKEYS ${blue}F1:Help"
     HOTKEYS="$HOTKEYS ${blue}F3:Info"
